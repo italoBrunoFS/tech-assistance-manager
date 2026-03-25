@@ -66,9 +66,31 @@ async function getPublicOS(id){
  return rows[0]
 }
 
-async function getValorTotalOs(id) {
+async function getTotalValueOs(id) {
   const {rows} = await pool.query('SELECT valor_total FROM os WHERE id_os = $1', [id]);
   return rows[0];
+}
+
+async function getOSFull(id) {
+  const { rows } = await pool.query(`SELECT 
+os.id_os,
+os.descricao_problema,
+os.valor_mao_obra,
+os.valor_total,
+cliente.nome AS cliente,
+equipamento.tipo,
+equipamento.marca,
+equipamento.modelo,
+peca.nome_peca,
+os_peca.quantidade,
+os_peca.preco_unitario_cobrado
+FROM os
+JOIN equipamento ON os.id_equipamento = equipamento.id_equipamento
+JOIN cliente ON equipamento.id_cliente = cliente.id_cliente
+LEFT JOIN os_peca ON os.id_os = os_peca.id_os
+LEFT JOIN peca ON os_peca.id_peca = peca.id_peca
+WHERE os.id_os = $1;`, [id]);
+  return rows;
 }
 
 module.exports = {
@@ -77,5 +99,6 @@ module.exports = {
   createOS,
   patchStatusOs,
   getPublicOS,
-  getValorTotalOs
+  getTotalValueOs,
+  getOSFull
 };

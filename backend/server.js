@@ -11,6 +11,7 @@ const paymentRoute = require('./routes/paymentRoute')
 const photoRoute = require('./routes/photoRoute')
 const notificationRoute = require('./routes/notificationRoute')
 const cargoRoute = require('./routes/cargoRoute')
+const reportsRoute = require('./routes/reportsRoute');
 
 const app = express()
 
@@ -26,6 +27,7 @@ app.use('/payment', paymentRoute);
 app.use('/photo', photoRoute);
 app.use('/notification', notificationRoute);
 app.use('/cargo', cargoRoute);
+app.use('/reports', reportsRoute);
 
 const PORT  = 5000
 
