@@ -18,6 +18,30 @@ async function patchStatusOs(id, status){
   return rows[0];
 }
 
+async function getStatusNotificationContext(id) {
+  const { rows } = await pool.query(
+    `
+    SELECT
+      os.id_os,
+      os.status_os,
+      cliente.nome AS nome_cliente,
+      cliente.telefone,
+      equipamento.tipo,
+      equipamento.marca,
+      equipamento.modelo
+    FROM os
+    JOIN equipamento
+      ON os.id_equipamento = equipamento.id_equipamento
+    JOIN cliente
+      ON equipamento.id_cliente = cliente.id_cliente
+    WHERE os.id_os = $1
+    `,
+    [id]
+  );
+
+  return rows[0];
+}
+
 async function createOS({
   descricao_problema,
   data_abertura,
@@ -98,6 +122,7 @@ module.exports = {
   getOSById,
   createOS,
   patchStatusOs,
+  getStatusNotificationContext,
   getPublicOS,
   getTotalValueOs,
   getOSFull

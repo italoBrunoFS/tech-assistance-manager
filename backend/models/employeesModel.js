@@ -1,28 +1,44 @@
 const pool = require('../db/db');
-// const bcrypt = require('bcrypt');
+const { hashPassword, normalizeAccessLevel } = require('../utils/auth');
+
+function sanitizeEmployee(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id_funcionario: row.id_funcionario,
+    nome: row.nome,
+    email: row.email,
+    nivel_acesso: row.nivel_acesso,
+    id_cargo: row.id_cargo
+  };
+}
+
+function getRawPassword(input = {}) {
+  return input.senha ?? input.senha_hash ?? null;
+}
 
 async function getAllEmployees() {
   const { rows } = await pool.query(
-    `SELECT 
+    `SELECT
        id_funcionario,
        nome,
        email,
-       senha_hash,
        nivel_acesso,
        id_cargo
      FROM funcionario`
   );
 
-  return rows;
+  return rows.map(sanitizeEmployee);
 }
 
 async function getEmployeeById(id) {
   const { rows } = await pool.query(
-    `SELECT 
+    `SELECT
        id_funcionario,
        nome,
        email,
-       senha_hash,
        nivel_acesso,
        id_cargo
      FROM funcionario
@@ -30,12 +46,12 @@ async function getEmployeeById(id) {
     [id]
   );
 
-  return rows[0];
+  return sanitizeEmployee(rows[0]);
 }
 
-async function getEmployeeByEmail(email) {
+async function getEmployeeAuthByEmail(email) {
   const { rows } = await pool.query(
-    `SELECT 
+    `SELECT
        id_funcionario,
        nome,
        email,
@@ -50,44 +66,55 @@ async function getEmployeeByEmail(email) {
   return rows[0];
 }
 
+async function countEmployees() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS total FROM funcionario');
+  return rows[0].total;
+}
+
 async function createEmployee({
   nome,
   email,
+  senha,
   senha_hash,
   nivel_acesso,
   id_cargo
 }) {
+  const rawPassword = getRawPassword({ senha, senha_hash });
 
-  // const hash = await bcrypt.hash(senha_hash, 10);
+  if (!rawPassword) {
+    throw new Error('Senha obrigatoria');
+  }
+
+  const passwordHash = await hashPassword(rawPassword);
+  const normalizedAccessLevel = normalizeAccessLevel(nivel_acesso || 'tecnico');
 
   const { rows } = await pool.query(
     `INSERT INTO funcionario
      (nome, email, senha_hash, nivel_acesso, id_cargo)
      VALUES ($1, $2, $3, $4, $5)
-     RETURNING id_funcionario`,
+     RETURNING
+       id_funcionario,
+       nome,
+       email,
+       nivel_acesso,
+       id_cargo`,
     [
       nome,
       email,
-      senha_hash, // hash
-      nivel_acesso,
-      id_cargo
+      passwordHash,
+      normalizedAccessLevel,
+      id_cargo || null
     ]
   );
 
-  return {
-    id: rows[0].id_funcionario,
-    nome,
-    email,
-    nivel_acesso,
-    id_cargo
-  };
+  return sanitizeEmployee(rows[0]);
 }
 
 async function updateEmployee(
   id,
-  { nome, email, senha_hash, nivel_acesso, id_cargo }
+  { nome, email, senha, senha_hash, nivel_acesso, id_cargo }
 ) {
-
+  const rawPassword = getRawPassword({ senha, senha_hash });
   let query = `
     UPDATE funcionario
     SET nome = $1,
@@ -98,52 +125,87 @@ async function updateEmployee(
   const params = [
     nome,
     email,
-    nivel_acesso,
-    id_cargo
+    normalizeAccessLevel(nivel_acesso || 'tecnico'),
+    id_cargo || null
   ];
 
   let index = 5;
 
-  if (senha_hash) {
-    // const hash = await bcrypt.hash(senha_hash, 10);
+  if (rawPassword) {
+    const passwordHash = await hashPassword(rawPassword);
     query += `, senha_hash = $${index}`;
-    params.push(senha_hash); // hash
+    params.push(passwordHash);
     index++;
   }
 
-  query += ` WHERE id_funcionario = $${index}`;
+  query += `
+      WHERE id_funcionario = $${index}
+      RETURNING
+        id_funcionario,
+        nome,
+        email,
+        nivel_acesso,
+        id_cargo`;
   params.push(id);
 
-  const result = await pool.query(query, params);
-
-  return result.rowCount > 0;
+  const { rows } = await pool.query(query, params);
+  return sanitizeEmployee(rows[0]);
 }
 
 async function patchEmployee(id, fields) {
+  const allowedFields = ['nome', 'email', 'nivel_acesso', 'id_cargo'];
+  const updates = [];
+  const values = [];
 
-  const keys = Object.keys(fields);
-  const values = Object.values(fields);
+  Object.entries(fields).forEach(([key, value]) => {
+    if (allowedFields.includes(key)) {
+      const normalizedValue = key === 'nivel_acesso'
+        ? normalizeAccessLevel(value)
+        : value;
+      updates.push(`${key} = $${updates.length + 1}`);
+      values.push(normalizedValue);
+    }
+  });
 
-  if (keys.length === 0) return false;
+  const rawPassword = getRawPassword(fields);
 
-  const senhaIndex = keys.indexOf('senha_hash');
-
-  if (senhaIndex !== -1) {
-    // values[senhaIndex] = await bcrypt.hash(values[senhaIndex], 10);
+  if (rawPassword) {
+    const passwordHash = await hashPassword(rawPassword);
+    updates.push(`senha_hash = $${updates.length + 1}`);
+    values.push(passwordHash);
   }
 
-  const setClause = keys
-    .map((key, index) => `${key} = $${index + 1}`)
-    .join(', ');
+  if (updates.length === 0) {
+    return false;
+  }
 
-  const result = await pool.query(
+  values.push(id);
+
+  const { rows } = await pool.query(
     `UPDATE funcionario
-     SET ${setClause}
-     WHERE id_funcionario = $${keys.length + 1}`,
-    [...values, id]
+     SET ${updates.join(', ')}
+     WHERE id_funcionario = $${updates.length + 1}
+     RETURNING
+       id_funcionario,
+       nome,
+       email,
+       nivel_acesso,
+       id_cargo`,
+    values
   );
 
-  return result.rowCount > 0;
+  return sanitizeEmployee(rows[0]);
+}
+
+async function updateEmployeePasswordHash(id, passwordHash) {
+  const { rowCount } = await pool.query(
+    `UPDATE funcionario
+     SET senha_hash = $1
+     WHERE id_funcionario = $2`,
+    [passwordHash, id]
+  );
+
+  return rowCount > 0;
 }
 
 async function deleteEmployee(id) {
@@ -156,11 +218,13 @@ async function deleteEmployee(id) {
 }
 
 module.exports = {
-  getAllEmployees,
-  getEmployeeById,
-  getEmployeeByEmail,
+  countEmployees,
   createEmployee,
-  updateEmployee,
+  deleteEmployee,
+  getAllEmployees,
+  getEmployeeAuthByEmail,
+  getEmployeeById,
   patchEmployee,
-  deleteEmployee
+  updateEmployee,
+  updateEmployeePasswordHash
 };

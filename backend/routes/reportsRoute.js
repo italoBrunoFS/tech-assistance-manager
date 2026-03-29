@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 
 const controller = require('../controllers/reportsController');
+const { authenticate } = require('../middleware/authMiddleware');
 
+router.use(authenticate);
 
 // Finance
 router.get('/revenue', controller.getTotalRevenue);
