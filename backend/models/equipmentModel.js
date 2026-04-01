@@ -13,12 +13,20 @@ async function getEquipmentById(id) {
   return rows[0];
 }
 
+async function getEquipmentBySerial(serial) {
+  const { rows } = await pool.query(
+    `SELECT * FROM equipamento WHERE serial = $1`,
+    [serial]
+  );
+  return rows[0];
+}
+
 async function createEquipment({ tipo, marca, modelo, serial, id_cliente }) {
   const { rows } = await pool.query(
     `INSERT INTO equipamento (tipo, marca, modelo, serial, id_cliente)
      VALUES ($1,$2,$3,$4,$5)
      RETURNING *`,
-    [tipo, marca, modelo, serial || null, id_cliente]
+    [tipo, marca, modelo, serial, id_cliente]
   );
   return rows[0];
 }
@@ -33,7 +41,7 @@ async function updateEquipment(id, { tipo, marca, modelo, serial, id_cliente }) 
          id_cliente = $5
      WHERE id_equipamento = $6
      RETURNING *`,
-    [tipo, marca, modelo, serial || null, id_cliente, id]
+    [tipo, marca, modelo, serial, id_cliente, id]
   );
   return rows[0];
 }
@@ -71,6 +79,7 @@ async function getHistoryBySerial(serial) {
 module.exports = {
   getAllEquipments,
   getEquipmentById,
+  getEquipmentBySerial,
   createEquipment,
   updateEquipment,
   deleteEquipment,

@@ -1,5 +1,9 @@
 const model = require('../models/equipmentModel');
 
+function normalizeSerial(rawSerial) {
+  return String(rawSerial || '').trim().toUpperCase();
+}
+
 const getAllEquipments = async (req, res) => {
   try {
     const equipments = await model.getAllEquipments();
@@ -24,7 +28,22 @@ const getEquipmentById = async (req, res) => {
 
 const createEquipment = async (req, res) => {
   try {
-    const equipment = await model.createEquipment(req.body);
+    const serial = normalizeSerial(req.body?.serial);
+
+    if (!serial) {
+      return res.status(400).json({ message: 'Serial obrigatorio para cadastrar equipamento' });
+    }
+
+    const existingEquipment = await model.getEquipmentBySerial(serial);
+
+    if (existingEquipment) {
+      return res.status(409).json({ message: 'Ja existe um equipamento com esse serial' });
+    }
+
+    const equipment = await model.createEquipment({
+      ...req.body,
+      serial
+    });
     res.status(201).json(equipment);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,7 +52,22 @@ const createEquipment = async (req, res) => {
 
 const updateEquipment = async (req, res) => {
   try {
-    const updated = await model.updateEquipment(req.params.id, req.body);
+    const serial = normalizeSerial(req.body?.serial);
+
+    if (!serial) {
+      return res.status(400).json({ message: 'Serial obrigatorio para atualizar equipamento' });
+    }
+
+    const existingEquipment = await model.getEquipmentBySerial(serial);
+
+    if (existingEquipment && String(existingEquipment.id_equipamento) !== String(req.params.id)) {
+      return res.status(409).json({ message: 'Ja existe um equipamento com esse serial' });
+    }
+
+    const updated = await model.updateEquipment(req.params.id, {
+      ...req.body,
+      serial
+    });
 
     if (!updated)
       return res.status(404).json({ message: 'Equipamento nao encontrado' });
