@@ -26,6 +26,7 @@ async function getStatusNotificationContext(id) {
       os.status_os,
       cliente.nome AS nome_cliente,
       cliente.telefone,
+      cliente.email,
       equipamento.tipo,
       equipamento.marca,
       equipamento.modelo
