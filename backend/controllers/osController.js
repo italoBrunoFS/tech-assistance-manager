@@ -161,8 +161,7 @@ const patchStatusOs = async (req, res) => {
       email_notification: {
         channel: 'Email',
         sent: emailResult.sent,
-        status: emailResult.status,
-        preview_url: emailResult.previewUrl || null
+        status: emailResult.status
       }
     });
   } catch (err) {

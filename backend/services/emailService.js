@@ -1,19 +1,13 @@
 const nodemailer = require('nodemailer');
 
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === 'true';
-const EMAIL_PROVIDER = String(process.env.EMAIL_PROVIDER || 'ethereal').trim().toLowerCase();
 const EMAIL_GMAIL_USER = process.env.EMAIL_GMAIL_USER || null;
 const EMAIL_GMAIL_APP_PASSWORD = process.env.EMAIL_GMAIL_APP_PASSWORD || null;
 const EMAIL_FROM = process.env.EMAIL_FROM || (
-  EMAIL_PROVIDER === 'gmail' && EMAIL_GMAIL_USER
+  EMAIL_GMAIL_USER
     ? `Assistencia Tecnica <${EMAIL_GMAIL_USER}>`
     : 'Assistencia Tecnica <no-reply@assistencia.local>'
 );
-const EMAIL_ETHEREAL_HOST = process.env.EMAIL_ETHEREAL_HOST || 'smtp.ethereal.email';
-const EMAIL_ETHEREAL_PORT = Number(process.env.EMAIL_ETHEREAL_PORT || 587);
-const EMAIL_ETHEREAL_SECURE = process.env.EMAIL_ETHEREAL_SECURE === 'true';
-const EMAIL_ETHEREAL_USER = process.env.EMAIL_ETHEREAL_USER || null;
-const EMAIL_ETHEREAL_PASS = process.env.EMAIL_ETHEREAL_PASS || null;
 
 let transporterPromise = null;
 
@@ -79,53 +73,17 @@ function buildStatusEmailHtml({
 }
 
 async function createTransporter() {
-  if (EMAIL_PROVIDER === 'gmail') {
-    if (!EMAIL_GMAIL_USER || !EMAIL_GMAIL_APP_PASSWORD) {
-      const error = new Error('Gmail SMTP nao configurado');
-      error.code = 'GMAIL_NOT_CONFIGURED';
-      throw error;
-    }
-
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: EMAIL_GMAIL_USER,
-        pass: EMAIL_GMAIL_APP_PASSWORD
-      }
-    });
-  }
-
-  if (EMAIL_PROVIDER !== 'ethereal') {
-    const error = new Error(`Provedor de email nao suportado: ${EMAIL_PROVIDER}`);
-    error.code = 'EMAIL_PROVIDER_INVALID';
+  if (!EMAIL_GMAIL_USER || !EMAIL_GMAIL_APP_PASSWORD) {
+    const error = new Error('Gmail SMTP nao configurado');
+    error.code = 'GMAIL_NOT_CONFIGURED';
     throw error;
   }
 
-  if (EMAIL_ETHEREAL_USER && EMAIL_ETHEREAL_PASS) {
-    return nodemailer.createTransport({
-      host: EMAIL_ETHEREAL_HOST,
-      port: EMAIL_ETHEREAL_PORT,
-      secure: EMAIL_ETHEREAL_SECURE,
-      auth: {
-        user: EMAIL_ETHEREAL_USER,
-        pass: EMAIL_ETHEREAL_PASS
-      }
-    });
-  }
-
-  const account = await nodemailer.createTestAccount();
-
-  console.log('ethereal account created', {
-    user: account.user
-  });
-
   return nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
+    service: 'gmail',
     auth: {
-      user: account.user,
-      pass: account.pass
+      user: EMAIL_GMAIL_USER,
+      pass: EMAIL_GMAIL_APP_PASSWORD
     }
   });
 }
@@ -178,16 +136,10 @@ async function sendStatusEmailNotification({
       html
     });
 
-    const previewUrl = nodemailer.getTestMessageUrl(info) || null;
-    if (previewUrl) {
-      console.log('ethereal preview url', { previewUrl });
-    }
-
     return {
       sent: true,
       status: 'sent',
-      details: info.messageId || null,
-      previewUrl
+      details: info.messageId || null
     };
   } catch (error) {
     if (error.code === 'GMAIL_NOT_CONFIGURED') {
@@ -195,14 +147,6 @@ async function sendStatusEmailNotification({
         sent: false,
         status: 'not_configured',
         details: 'Defina EMAIL_GMAIL_USER e EMAIL_GMAIL_APP_PASSWORD no .env'
-      };
-    }
-
-    if (error.code === 'EMAIL_PROVIDER_INVALID') {
-      return {
-        sent: false,
-        status: 'invalid_provider',
-        details: error.message
       };
     }
 
