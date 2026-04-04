@@ -43,11 +43,11 @@ EMAIL_FROM=Assistencia Tecnica <seuemail@gmail.com>
 EMAIL_GMAIL_USER=seuemail@gmail.com
 EMAIL_GMAIL_APP_PASSWORD=sua_senha_de_app_de_16_caracteres
 
-4 EXECUTAR O BACKEND
+3 EXECUTAR O BACKEND
 
 Ainda na pasta backend:
 
-npm run dev
+npm run dev (TEM QUE TER NODE INSTALADO NO COMPUTADOR E TER DADO NPM INSTALL ANTES)
 
 Servidor sobe em:
 http://localhost:5000
@@ -55,7 +55,7 @@ http://localhost:5000
 
 5 CONFIGURAR FRONTEND
 
-Em outro terminal digite cd frontend
+Em OUTRO TERMINAL digite cd frontend
 Depois digite npm install
 por fim npm run dev
 
