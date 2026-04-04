@@ -1,0 +1,80 @@
+GUIA DE CONFIGURACAO E EXECUCAO
+
+1 REQUISITOS
+- Node.js 18+ (recomendado: Node.js 20 LTS)
+- npm
+- Conta Gmail (se for usar envio real de email)
+  - Verificacao em 2 etapas ativada
+  - Senha de app (App Password) criada
+- Porta 5000 livre
+
+
+2 PASSO A PASSO DE INSTALACAO
+
+2.1 Clonar o projeto e entrar na pasta backend
+No PowerShell:
+
+git clone <URL_DO_REPOSITORIO>
+cd "backend"
+
+
+2.2 Instalar dependencias
+
+npm install
+
+
+2.3 Criar o arquivo .env
+
+Copie o conteúdo do env.example para um novo arquivo .env dentro da pasta do backend
+
+
+2.4 Preencher variaveis de ambiente no arquivo backend/.env
+
+DATABASE_URL=postgresql://neondb_owner:npg_MGqoHKu2eX4B@ep-late-sun-ac322dqa-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+AUTH_TOKEN_SECRET=66249d1a31d27c57d7113743f99d18eb521fdd2242e7c90d1eb142bd9be70d4b
+AUTH_TOKEN_EXPIRES_HOURS=12
+
+WHATSAPP_ENABLED=true
+WHATSAPP_SIMULATION_MODE=true
+PUBLIC_OS_PAGE_BASE_URL=http://localhost:5173
+
+EMAIL_ENABLED=true
+EMAIL_FROM=Assistencia Tecnica <seuemail@gmail.com>
+EMAIL_GMAIL_USER=seuemail@gmail.com
+EMAIL_GMAIL_APP_PASSWORD=sua_senha_de_app_de_16_caracteres
+
+4 EXECUTAR O BACKEND
+
+Ainda na pasta backend:
+
+npm run dev
+
+Servidor sobe em:
+http://localhost:5000
+
+
+5 CONFIGURAR FRONTEND
+
+Em outro terminal digite cd frontend
+Depois digite npm install
+por fim npm run dev
+
+Abra o link que aparecer no terminal
+
+6 LOGIN
+
+Para fazer Login utilize os dados de um dos funcionários cadastrados no banco.
+
+Exemplo:
+
+Email: carlos@empresa.com
+Senha: 123456
+
+
+7 OBSERVACOES IMPORTANTES
+
+- O Gmail definido no .env e o REMETENTE.
+- O destinatario e o email do cliente vinculado a OS (cliente.email).
+- Se o email nao chegar, verificar caixa de spam.
+- Se usar status igual ao atual, o backend retorna erro de conflito e nao reenviara notificacao.
+
