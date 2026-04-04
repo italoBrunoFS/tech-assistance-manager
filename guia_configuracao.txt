@@ -30,8 +30,8 @@ Copie o conteúdo do env.example para um novo arquivo .env dentro da pasta do ba
 
 2.4 Preencher variaveis de ambiente no arquivo backend/.env
 
-DATABASE_URL=postgresql://neondb_owner:npg_MGqoHKu2eX4B@ep-late-sun-ac322dqa-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-AUTH_TOKEN_SECRET=66249d1a31d27c57d7113743f99d18eb521fdd2242e7c90d1eb142bd9be70d4b
+DATABASE_URL=connector string do neon
+AUTH_TOKEN_SECRET=colocar_segredo_qualquer
 AUTH_TOKEN_EXPIRES_HOURS=12
 
 WHATSAPP_ENABLED=true

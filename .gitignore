@@ -3,3 +3,4 @@ node_modules/
 dist/
 build/
 #uploads/photos/
+requirements_checklist.md
