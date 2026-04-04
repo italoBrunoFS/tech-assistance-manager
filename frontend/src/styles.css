@@ -186,6 +186,17 @@ body {
   color: rgba(234, 255, 249, 0.76);
 }
 
+.sidebar-role {
+  font-size: 0.86rem;
+  line-height: 1.35;
+  font-weight: 600;
+  margin-bottom: 0.65rem;
+}
+
+.sidebar-footer .button {
+  align-self: flex-start;
+}
+
 .workspace {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -598,6 +609,24 @@ textarea:focus {
 .json-preview pre {
   margin: 0.5rem 0 0;
   white-space: pre-wrap;
+}
+
+.order-qr-preview {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.order-qr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.order-qr-content {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
 }
 
 .result-emphasis {

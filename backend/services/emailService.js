@@ -1,13 +1,14 @@
 const nodemailer = require('nodemailer');
+const QRCode = require('qrcode');
 
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === 'true';
 const EMAIL_GMAIL_USER = process.env.EMAIL_GMAIL_USER || null;
 const EMAIL_GMAIL_APP_PASSWORD = process.env.EMAIL_GMAIL_APP_PASSWORD || null;
-const EMAIL_FROM = process.env.EMAIL_FROM || (
-  EMAIL_GMAIL_USER
+const EMAIL_FROM =
+  process.env.EMAIL_FROM ||
+  (EMAIL_GMAIL_USER
     ? `Assistência Técnica <${EMAIL_GMAIL_USER}>`
-    : 'Assistência Técnica <no-reply@assistencia.local>'
-);
+    : 'Assistência Técnica <no-reply@assistencia.local>');
 
 let transporterPromise = null;
 
@@ -33,10 +34,10 @@ function escapeHtml(value) {
 
 function buildStatusEmailText({
   clientName,
-  osId,
   status,
   equipment,
-  publicUrl
+  publicUrl,
+  hasQrCode
 }) {
   const safeClientName = clientName || 'Cliente';
   const safeStatus = status || 'Atualizado';
@@ -46,24 +47,29 @@ function buildStatusEmailText({
   return [
     `Olá, ${safeClientName}!`,
     '',
-    `A ordem de serviço #${osId} recebeu uma nova atualização.`,
+    'Houve uma atualização da sua ordem de serviço.',
     `Equipamento: ${safeEquipment}`,
-    `Status atual: ${safeStatus}`,
+    `Novo status: ${safeStatus}`,
     '',
     safePublicUrl
-      ? `Acompanhe sua OS pelo link público: ${safePublicUrl}`
-      : 'Acompanhe sua OS pelo nosso canal de atendimento.',
+      ? `Acompanhe o andamento da sua ordem de serviço pelo link público: ${safePublicUrl}`
+      : 'Acompanhe o andamento da sua ordem de serviço pelo nosso canal de atendimento.',
+    hasQrCode
+      ? 'QR Code: escaneie a imagem deste e-mail para abrir a página pública mais rapidamente.'
+      : null,
     '',
-    'Se precisar de ajuda, basta responder este email.'
-  ].join('\n');
+    'Se tiver qualquer dúvida, basta responder este e-mail.'
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildStatusEmailHtml({
   clientName,
-  osId,
   status,
   equipment,
-  publicUrl
+  publicUrl,
+  qrCodeCid
 }) {
   const safeClientName = escapeHtml(clientName || 'Cliente');
   const safeStatus = escapeHtml(status || 'Atualizado');
@@ -71,15 +77,15 @@ function buildStatusEmailHtml({
   const safePublicUrl = String(publicUrl || '').trim();
   const escapedPublicUrl = safePublicUrl ? escapeHtml(safePublicUrl) : '';
   const hasPublicUrl = Boolean(safePublicUrl);
+  const hasQrCode = Boolean(qrCodeCid);
+  const escapedQrCodeCid = hasQrCode ? escapeHtml(qrCodeCid) : '';
 
   return `
     <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #222;">
       <p>Olá, <strong>${safeClientName}</strong>!</p>
-      <p>
-        A ordem de serviço <strong>#${osId}</strong> recebeu uma nova atualização.
-      </p>
+      <p>Houve uma atualização da sua ordem de serviço.</p>
       <p><strong>Equipamento:</strong> ${safeEquipment}</p>
-      <p><strong>Status atual:</strong> ${safeStatus}</p>
+      <p><strong>Novo status:</strong> ${safeStatus}</p>
       ${
         hasPublicUrl
           ? `
@@ -90,16 +96,66 @@ function buildStatusEmailHtml({
           rel="noopener noreferrer"
           style="display:inline-block;padding:10px 16px;background:#1f7a5a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;"
         >
-          Ver página pública da OS
+          Ver andamento da ordem de serviço
         </a>
       </p>
       <p style="font-size:12px;color:#666;word-break:break-all;">${escapedPublicUrl}</p>
       `
           : ''
       }
-      <p>Se precisar de ajuda, basta responder este email.</p>
+      ${
+        hasQrCode
+          ? `
+      <p><strong>Escaneie o QR Code para abrir a página pública:</strong></p>
+      <p>
+        <img
+          src="cid:${escapedQrCodeCid}"
+          alt="QR Code da página pública da ordem de serviço"
+          width="180"
+          height="180"
+          style="display:block;border:1px solid #e1e1e1;border-radius:10px;padding:8px;background:#fff;"
+        />
+      </p>
+      `
+          : ''
+      }
+      <p>Se tiver qualquer dúvida, basta responder este e-mail.</p>
     </div>
   `;
+}
+
+async function buildPublicStatusQrAttachment({ publicUrl, osId }) {
+  const safePublicUrl = String(publicUrl || '').trim();
+  if (!safePublicUrl) return null;
+
+  try {
+    const qrCodeBuffer = await QRCode.toBuffer(safePublicUrl, {
+      type: 'png',
+      width: 220,
+      margin: 1,
+      color: {
+        dark: '#1f7a5a',
+        light: '#ffffff'
+      }
+    });
+
+    const numericOsId = Number(osId);
+    const safeOsId = Number.isInteger(numericOsId) && numericOsId > 0 ? numericOsId : 'status';
+    const cid = `public-os-${safeOsId}@assistencia.local`;
+
+    return {
+      cid,
+      attachment: {
+        filename: 'qrcode-ordem-servico.png',
+        content: qrCodeBuffer,
+        contentType: 'image/png',
+        cid
+      }
+    };
+  } catch (error) {
+    console.error('Falha ao gerar QR code da OS para email:', error.message);
+    return null;
+  }
 }
 
 async function createTransporter() {
@@ -149,23 +205,42 @@ async function sendStatusEmailNotification({
     return {
       sent: false,
       status: 'invalid_email',
-      details: 'Email do cliente inválido ou ausente'
+      details: 'E-mail do cliente inválido ou ausente'
     };
   }
 
   try {
     const transporter = await getTransporter();
-    const subject = `OS #${osId} atualizada para ${status || 'novo status'}`;
-    const text = buildStatusEmailText({ clientName, osId, status, equipment, publicUrl });
-    const html = buildStatusEmailHtml({ clientName, osId, status, equipment, publicUrl });
+    const qrCodePayload = await buildPublicStatusQrAttachment({ publicUrl, osId });
+    const subject = 'Houve uma atualização da sua ordem de serviço';
+    const text = buildStatusEmailText({
+      clientName,
+      status,
+      equipment,
+      publicUrl,
+      hasQrCode: Boolean(qrCodePayload)
+    });
+    const html = buildStatusEmailHtml({
+      clientName,
+      status,
+      equipment,
+      publicUrl,
+      qrCodeCid: qrCodePayload?.cid || null
+    });
 
-    const info = await transporter.sendMail({
+    const mailOptions = {
       from: EMAIL_FROM,
       to: normalizedEmail,
       subject,
       text,
       html
-    });
+    };
+
+    if (qrCodePayload) {
+      mailOptions.attachments = [qrCodePayload.attachment];
+    }
+
+    const info = await transporter.sendMail(mailOptions);
 
     return {
       sent: true,

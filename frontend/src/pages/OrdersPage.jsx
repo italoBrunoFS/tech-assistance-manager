@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { Panel, EmptyState, InlineMessage } from '../components/Ui';
 import { backendApi } from '../services/backendApi';
-import { API_BASE_URL, extractApiError } from '../lib/api';
+import { extractApiError } from '../lib/api';
 import { formatCurrency, formatDate, toLocalDateTimeInputValue } from '../lib/format';
 
 const STATUS_OPTIONS = [
@@ -55,6 +56,7 @@ export function OrdersPage() {
   const [equipments, setEquipments] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [statusByOrder, setStatusByOrder] = useState({});
+  const [qrOrderId, setQrOrderId] = useState(null);
   const [status, setStatus] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -159,6 +161,11 @@ export function OrdersPage() {
     const publicLink = buildPublicLink(orderId);
     await navigator.clipboard.writeText(publicLink);
     setStatus({ type: 'success', text: `Link público da OS #${orderId} copiado.` });
+  }
+
+  function handleGenerateQr(orderId) {
+    setQrOrderId(orderId);
+    setStatus({ type: 'success', text: `QR Code da OS #${orderId} gerado.` });
   }
 
   return (
@@ -326,23 +333,43 @@ export function OrdersPage() {
                         >
                           Copiar link
                         </button>
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          onClick={() => handleGenerateQr(order.id_os)}
+                        >
+                          Gerar QR
+                        </button>
                         <Link to={`/public/os/${order.id_os}`} className="button button-ghost">
                           Público
                         </Link>
-                        <a
-                          href={`${API_BASE_URL}/os/${order.id_os}/status`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="button button-ghost"
-                        >
-                          JSON
-                        </a>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : null}
+
+        {qrOrderId ? (
+          <div className="json-preview order-qr-preview">
+            <div className="order-qr-header">
+              <strong>QR Code da OS #{qrOrderId}</strong>
+              <button
+                type="button"
+                className="button button-ghost"
+                onClick={() => setQrOrderId(null)}
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="order-qr-content">
+              <div className="qr-wrapper">
+                <QRCodeSVG value={buildPublicLink(qrOrderId)} size={180} includeMargin />
+              </div>
+              <p className="public-link">{buildPublicLink(qrOrderId)}</p>
+            </div>
           </div>
         ) : null}
       </Panel>
