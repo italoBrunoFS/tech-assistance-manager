@@ -87,8 +87,11 @@ async function getOSById(id) {
   return rows[0];
 }
 
-async function patchStatusOs(id, status){
-  const {rows} = await pool.query('UPDATE os SET status_os = $1 WHERE id_os = $2 RETURNING *', [status, id]);
+async function patchStatusOs(id, status, dataConclusao){
+  const {rows} = await pool.query(
+    'UPDATE os SET status_os = $1, data_conclusao = $2 WHERE id_os = $3 RETURNING *',
+    [status, dataConclusao, id]
+  );
   return rows[0];
 }
 
@@ -120,6 +123,7 @@ async function getStatusNotificationContext(id) {
 async function createOS({
   descricao_problema,
   data_abertura,
+  data_conclusao,
   status_os,
   id_funcionario,
   id_equipamento
@@ -127,12 +131,13 @@ async function createOS({
 
   const { rows } = await pool.query(
     `INSERT INTO os
-    (descricao_problema,data_abertura,status_os,id_funcionario,id_equipamento)
-    VALUES ($1,$2,$3,$4,$5)
+    (descricao_problema,data_abertura,data_conclusao,status_os,id_funcionario,id_equipamento)
+    VALUES ($1,$2,$3,$4,$5,$6)
     RETURNING *`,
     [
       descricao_problema,
       data_abertura,
+      data_conclusao,
       status_os,
       id_funcionario,
       id_equipamento

@@ -109,9 +109,12 @@ const createOS = async (req, res) => {
       return res.status(400).json({ message: 'status_os invalido' });
     }
 
+    const completionDate = status === 'Concluido' ? new Date() : null;
+
     const order = await model.createOS({
       ...req.body,
-      status_os: status
+      status_os: status,
+      data_conclusao: completionDate
     });
 
     await registerStatusHistoryLog({
@@ -407,13 +410,20 @@ const patchStatusOs = async (req, res) => {
 
     const currentStatus = resolveCanonicalStatus(currentRow.status_os);
 
+    if (currentStatus === 'Concluido') {
+      return res.status(409).json({
+        message: 'OS concluida nao pode ser alterada'
+      });
+    }
+
     if (currentStatus === newStatus) {
       return res.status(409).json({
         message: 'status_os já está definido com esse valor'
       });
     }
 
-    const patchedRow = await model.patchStatusOs(idOs, newStatus);
+    const completionDate = newStatus === 'Concluido' ? new Date() : null;
+    const patchedRow = await model.patchStatusOs(idOs, newStatus, completionDate);
 
     if (!patchedRow) {
       return res.status(404).json({ message: 'OS não encontrada' });

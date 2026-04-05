@@ -513,6 +513,7 @@ export function OrdersPage() {
                   const selectedStatus = statusByOrder[order.id_os] || order.status_os;
                   const normalizedSelectedStatus = normalizeStatusValue(selectedStatus);
                   const isSupportedStatus = Boolean(STATUS_CANONICAL_MAP[normalizedSelectedStatus]);
+                  const isLockedOrder = toCanonicalStatus(order.status_os) === 'Concluido';
                   const rowStatusOptions = isSupportedStatus
                     ? statusOptions
                     : [{ value: selectedStatus, label: `${selectedStatus} (legado)` }, ...statusOptions];
@@ -523,6 +524,7 @@ export function OrdersPage() {
                       <td>
                         <select
                           value={selectedStatus}
+                          disabled={isLockedOrder}
                           onChange={(event) =>
                             setStatusByOrder((current) => ({
                               ...current,
@@ -553,6 +555,8 @@ export function OrdersPage() {
                         <button
                           type="button"
                           className="button button-secondary"
+                          disabled={isLockedOrder}
+                          title={isLockedOrder ? 'OS concluida nao pode ser alterada' : ''}
                           onClick={() => handlePatchStatus(order.id_os)}
                         >
                           Atualizar
