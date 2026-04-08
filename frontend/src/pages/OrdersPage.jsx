@@ -584,6 +584,7 @@ export function OrdersPage() {
                   <th>Status</th>
                   <th>Abertura</th>
                   <th>Equip.</th>
+                  <th>Func.</th>
                   <th>Mao de obra</th>
                   <th>Total</th>
                   <th>Ações</th>
@@ -622,6 +623,7 @@ export function OrdersPage() {
                       </td>
                     <td>{formatDate(order.data_abertura)}</td>
                     <td>{order.id_equipamento}</td>
+                    <td>{order.id_funcionario ?? '-'}</td>
                     <td>
                       <input
                         type="number"

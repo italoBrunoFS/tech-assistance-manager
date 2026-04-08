@@ -106,9 +106,14 @@ const patchEmployee = async (req, res) => {
 const updateEmployeeAccessLevel = async (req, res) => {
   try {
     const targetId = Number(req.params.id);
+    const requesterAccessLevel = normalizeAccessLevel(req.auth?.nivel_acesso);
 
     if (!Number.isInteger(targetId) || targetId <= 0) {
       return res.status(400).json({ message: 'ID de funcionario invalido' });
+    }
+
+    if (!Number.isInteger(requesterAccessLevel) || requesterAccessLevel < 2) {
+      return res.status(403).json({ message: 'Acesso negado para este perfil' });
     }
 
     if (Number(req.auth?.sub) === targetId) {
@@ -121,11 +126,26 @@ const updateEmployeeAccessLevel = async (req, res) => {
       return res.status(400).json({ message: 'nivel_acesso invalido. Use um numero inteiro maior ou igual a 1' });
     }
 
-    const updatedEmployee = await model.updateEmployeeAccessLevel(targetId, normalizedAccessLevel);
+    const targetEmployee = await model.getEmployeeById(targetId);
 
-    if (!updatedEmployee) {
+    if (!targetEmployee) {
       return res.status(404).json({ message: 'Funcionario nao encontrado' });
     }
+
+    const targetCurrentLevel = normalizeAccessLevel(targetEmployee.nivel_acesso) ?? 1;
+    const isRequesterAdmin = requesterAccessLevel >= 3;
+
+    if (!isRequesterAdmin) {
+      if (targetCurrentLevel >= 3) {
+        return res.status(403).json({ message: 'Gerente nao pode alterar nivel de administrador' });
+      }
+
+      if (normalizedAccessLevel >= 3) {
+        return res.status(403).json({ message: 'Gerente nao pode definir nivel de administrador' });
+      }
+    }
+
+    const updatedEmployee = await model.updateEmployeeAccessLevel(targetId, normalizedAccessLevel);
 
     return res.status(200).json({
       message: 'Nivel de acesso atualizado com sucesso',

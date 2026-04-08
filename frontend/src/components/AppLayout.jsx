@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { formatAccessLevel } from '../lib/accessLevel';
+import { formatAccessLevel, toAccessLevel } from '../lib/accessLevel';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard' },
@@ -10,16 +10,20 @@ const navItems = [
   { path: '/equipamentos', label: 'Equipamentos' },
   { path: '/pagamentos', label: 'Pagamentos' },
   { path: '/pecas', label: 'Peças' },
-  { path: '/funcionarios', label: 'Funcionários' },
-  { path: '/cargos', label: 'Cargos' },
+  { path: '/funcionarios', label: 'Funcionários', minAccessLevel: 2 },
+  { path: '/cargos', label: 'Cargos', minAccessLevel: 2 },
   { path: '/fotos', label: 'Fotos' },
-  { path: '/notificacoes', label: 'Notificações' },
-  { path: '/relatorios', label: 'Relatórios' }
+  { path: '/notificacoes', label: 'Notificações', minAccessLevel: 2 },
+  { path: '/relatorios', label: 'Relatórios', minAccessLevel: 2 }
 ];
 
 export function AppLayout() {
   const { logout, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const currentAccessLevel = toAccessLevel(user?.nivel_acesso) ?? 1;
+  const visibleNavItems = navItems.filter(
+    (item) => currentAccessLevel >= (item.minAccessLevel ?? 1)
+  );
 
   return (
     <div className="app-shell">
@@ -33,7 +37,7 @@ export function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
+import { AccessLevelRoute } from './components/AccessLevelRoute';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -31,11 +32,39 @@ export default function App() {
           <Route path="/ordens" element={<OrdersPage />} />
           <Route path="/pagamentos" element={<PaymentsPage />} />
           <Route path="/pecas" element={<PartsPage />} />
-          <Route path="/funcionarios" element={<EmployeesPage />} />
-          <Route path="/cargos" element={<CargosPage />} />
+          <Route
+            path="/funcionarios"
+            element={(
+              <AccessLevelRoute minLevel={2}>
+                <EmployeesPage />
+              </AccessLevelRoute>
+            )}
+          />
+          <Route
+            path="/cargos"
+            element={(
+              <AccessLevelRoute minLevel={2}>
+                <CargosPage />
+              </AccessLevelRoute>
+            )}
+          />
           <Route path="/fotos" element={<PhotosPage />} />
-          <Route path="/notificacoes" element={<NotificationsPage />} />
-          <Route path="/relatorios" element={<ReportsPage />} />
+          <Route
+            path="/notificacoes"
+            element={(
+              <AccessLevelRoute minLevel={2}>
+                <NotificationsPage />
+              </AccessLevelRoute>
+            )}
+          />
+          <Route
+            path="/relatorios"
+            element={(
+              <AccessLevelRoute minLevel={2}>
+                <ReportsPage />
+              </AccessLevelRoute>
+            )}
+          />
         </Route>
       </Route>
 

@@ -9,7 +9,7 @@ router.get('/:id', controller.getEmployeeById);
 router.post('/', authorizeRoles('admin', 'gerente'), controller.createEmployee);
 router.put('/:id', authorizeRoles('admin', 'gerente'), controller.updateEmployee);
 router.patch('/:id', authorizeRoles('admin', 'gerente'), controller.patchEmployee);
-router.patch('/:id/access-level', authorizeRoles('admin'), controller.updateEmployeeAccessLevel);
+router.patch('/:id/access-level', authorizeRoles('admin', 'gerente'), controller.updateEmployeeAccessLevel);
 router.delete('/:id', authorizeRoles('admin'), controller.deleteEmployee);
 
 module.exports = router;

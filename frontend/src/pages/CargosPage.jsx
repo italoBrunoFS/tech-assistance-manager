@@ -5,7 +5,6 @@ import { extractApiError } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import {
   formatAccessLevel,
-  hasAdminAccess,
   hasManagerAccess,
   toAccessLevel
 } from '../lib/accessLevel';
@@ -56,9 +55,14 @@ export function CargosPage() {
   );
 
   const canManageAccessLevel = useMemo(
-    () => hasAdminAccess(user?.nivel_acesso),
+    () => hasManagerAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
+  const currentUserAccessLevel = useMemo(
+    () => toAccessLevel(user?.nivel_acesso) ?? 1,
+    [user?.nivel_acesso]
+  );
+  const isManagerOnly = currentUserAccessLevel >= 2 && currentUserAccessLevel < 3;
 
   async function loadData() {
     setIsLoading(true);
@@ -103,7 +107,7 @@ export function CargosPage() {
 
   async function handleSaveAccessLevel(employee) {
     if (!canManageAccessLevel) {
-      setStatus({ type: 'error', text: 'Somente admin pode alterar nivel de acesso.' });
+      setStatus({ type: 'error', text: 'Somente admin ou gerente pode alterar nivel de acesso.' });
       return;
     }
 
@@ -114,6 +118,16 @@ export function CargosPage() {
 
     const nextAccessLevel = toAccessLevel(accessDrafts[employee.id_funcionario]) ?? 1;
     const currentAccessLevel = toAccessLevel(employee.nivel_acesso) ?? 1;
+
+    if (isManagerOnly && currentAccessLevel >= 3) {
+      setStatus({ type: 'error', text: 'Gerente nao pode alterar nivel de administradores.' });
+      return;
+    }
+
+    if (isManagerOnly && nextAccessLevel >= 3) {
+      setStatus({ type: 'error', text: 'Gerente nao pode definir nivel de administrador.' });
+      return;
+    }
 
     if (nextAccessLevel === currentAccessLevel) {
       setStatus({ type: 'info', text: 'Nenhuma alteracao de nivel para salvar.' });
@@ -216,7 +230,7 @@ export function CargosPage() {
 
       <Panel
         title="Alterar nivel de acesso dos funcionarios"
-        subtitle="Somente admin pode alterar o nivel de acesso de outros usuarios"
+        subtitle="Admin e gerente podem alterar nivel de acesso (com restricoes para gerente)"
       >
         <InlineMessage type={canManageAccessLevel ? 'success' : 'info'}>
           {canManageAccessLevel
@@ -251,7 +265,10 @@ export function CargosPage() {
                   const selectedLevel = toAccessLevel(accessDrafts[employeeId]) ?? currentLevel;
                   const hasChanges = selectedLevel !== currentLevel;
                   const isSaving = savingEmployeeId === employeeId;
-                  const disableActions = !canManageAccessLevel || isOwnUser || isSaving;
+                  const isTargetAdmin = currentLevel >= 3;
+                  const managerCannotEditTargetAdmin = isManagerOnly && isTargetAdmin;
+                  const disableActions =
+                    !canManageAccessLevel || isOwnUser || isSaving || managerCannotEditTargetAdmin;
 
                   return (
                     <tr key={employeeId}>
@@ -263,13 +280,25 @@ export function CargosPage() {
                         <input
                           type="number"
                           min="1"
+                          max={isManagerOnly ? 2 : undefined}
                           step="1"
                           value={selectedLevel}
-                          disabled={!canManageAccessLevel || isOwnUser || isSaving}
+                          disabled={
+                            !canManageAccessLevel || isOwnUser || isSaving || managerCannotEditTargetAdmin
+                          }
                           onChange={(event) =>
                             setAccessDrafts((value) => ({
                               ...value,
-                              [employeeId]: Number(event.target.value || 1)
+                              [employeeId]: (() => {
+                                const parsed = Number(event.target.value || 1);
+                                const normalized = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+
+                                if (isManagerOnly) {
+                                  return Math.min(normalized, 2);
+                                }
+
+                                return normalized;
+                              })()
                             }))
                           }
                         />
