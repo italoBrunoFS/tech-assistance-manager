@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Panel, InlineMessage } from '../components/Ui';
 import { backendApi } from '../services/backendApi';
@@ -9,21 +9,36 @@ import { formatDate, formatDateTime } from '../lib/format';
 export function PublicStatusPage() {
   const navigate = useNavigate();
   const params = useParams();
-  const [orderId, setOrderId] = useState(params.id || '');
+  const [searchParams] = useSearchParams();
+  const orderId = String(params.id || '').trim();
+  const accessToken = String(searchParams.get('access_token') || '').trim();
   const [status, setStatus] = useState({ type: '', text: '' });
   const [orderData, setOrderData] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const publicUrl = useMemo(
-    () => (orderId ? `${window.location.origin}/public/os/${orderId}` : ''),
-    [orderId]
-  );
+  const publicUrl = useMemo(() => {
+    if (!orderId) {
+      return '';
+    }
 
-  async function fetchStatus(targetOrderId) {
+    const baseUrl = `${window.location.origin}/public/os/${orderId}`;
+    if (!accessToken) {
+      return baseUrl;
+    }
+
+    return `${baseUrl}?access_token=${encodeURIComponent(accessToken)}`;
+  }, [orderId, accessToken]);
+
+  async function fetchStatus(targetOrderId, token) {
     if (!targetOrderId) {
-      setStatus({ type: 'error', text: 'Informe o número da OS.' });
+      setStatus({ type: 'error', text: 'Link publico invalido: OS nao informada.' });
+      return;
+    }
+
+    if (!token) {
+      setStatus({ type: 'error', text: 'Link publico invalido: token de acesso ausente.' });
       return;
     }
 
@@ -32,15 +47,14 @@ export function PublicStatusPage() {
 
     try {
       const [statusResponse, photosResponse, updatesResponse] = await Promise.all([
-        backendApi.os.getPublicStatus(targetOrderId),
-        backendApi.os.getPublicPhotos(targetOrderId),
-        backendApi.os.getPublicUpdates(targetOrderId)
+        backendApi.os.getPublicStatus(targetOrderId, token),
+        backendApi.os.getPublicPhotos(targetOrderId, token),
+        backendApi.os.getPublicUpdates(targetOrderId, token)
       ]);
 
       setOrderData(statusResponse.data);
       setPhotos(photosResponse.data?.photos || []);
       setUpdates(updatesResponse.data?.updates || []);
-      navigate(`/public/os/${targetOrderId}`, { replace: true });
       setStatus({ type: 'success', text: 'Status público carregado com sucesso.' });
     } catch (error) {
       setOrderData(null);
@@ -53,10 +67,16 @@ export function PublicStatusPage() {
   }
 
   useEffect(() => {
-    if (params.id) {
-      fetchStatus(params.id);
+    if (orderId) {
+      fetchStatus(orderId, accessToken);
+      return;
     }
-  }, [params.id]);
+
+    setOrderData(null);
+    setPhotos([]);
+    setUpdates([]);
+    setStatus({ type: 'error', text: 'Link publico invalido: OS nao informada.' });
+  }, [orderId, accessToken]);
 
   return (
     <div className="public-page">
@@ -68,24 +88,8 @@ export function PublicStatusPage() {
           </button>
         }
       >
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            fetchStatus(orderId);
-          }}
-        >
-          <input
-            type="number"
-            min="1"
-            value={orderId}
-            onChange={(event) => setOrderId(event.target.value)}
-            placeholder="Digite o ID da OS"
-          />
-          <button type="submit" className="button button-primary" disabled={isLoading}>
-            {isLoading ? 'Consultando...' : 'Consultar status'}
-          </button>
-        </form>
+        <p>Esta pagina permite consultar apenas a OS vinculada a este link seguro.</p>
+        {isLoading ? <p>Consultando status...</p> : null}
 
         <InlineMessage type={status.type}>{status.text}</InlineMessage>
 

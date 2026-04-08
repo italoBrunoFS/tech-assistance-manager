@@ -13,7 +13,8 @@ const EMAIL_FROM =
 let transporterPromise = null;
 const EMAIL_EVENT_TYPES = Object.freeze({
   OS_CREATED: 'os_created',
-  STATUS_UPDATED: 'status_updated'
+  STATUS_UPDATED: 'status_updated',
+  DESCRIPTION_UPDATED: 'description_updated'
 });
 
 function normalizeEmail(email) {
@@ -224,6 +225,108 @@ function buildCreatedEmailHtml({
   `;
 }
 
+function buildDescriptionUpdatedEmailText({
+  clientName,
+  osId,
+  status,
+  equipment,
+  description,
+  publicUrl,
+  hasQrCode
+}) {
+  const safeClientName = clientName || 'Cliente';
+  const safeStatus = status || 'Atualizado';
+  const safeEquipment = equipment || 'seu equipamento';
+  const safeDescription = String(description || '').trim() || 'Nao informado';
+  const safePublicUrl = publicUrl || null;
+
+  return [
+    `Ola, ${safeClientName}!`,
+    '',
+    `A descricao do problema da sua ordem de servico #${osId} foi atualizada.`,
+    `Equipamento: ${safeEquipment}`,
+    `Status atual: ${safeStatus}`,
+    `Descricao atual: ${safeDescription}`,
+    '',
+    safePublicUrl
+      ? `Acompanhe sua ordem de servico pelo link publico: ${safePublicUrl}`
+      : 'Acompanhe sua ordem de servico pelo nosso canal de atendimento.',
+    hasQrCode
+      ? 'QR Code: escaneie a imagem deste e-mail para abrir a pagina publica mais rapidamente.'
+      : null,
+    '',
+    'Se tiver qualquer duvida, basta responder este e-mail.'
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildDescriptionUpdatedEmailHtml({
+  clientName,
+  osId,
+  status,
+  equipment,
+  description,
+  publicUrl,
+  qrCodeCid
+}) {
+  const safeClientName = escapeHtml(clientName || 'Cliente');
+  const safeStatus = escapeHtml(status || 'Atualizado');
+  const safeEquipment = escapeHtml(equipment || 'seu equipamento');
+  const safeDescription = escapeHtml(String(description || '').trim() || 'Nao informado');
+  const parsedOsId = Number(osId);
+  const safeOsId = Number.isInteger(parsedOsId) && parsedOsId > 0 ? String(parsedOsId) : 'N/A';
+  const safePublicUrl = String(publicUrl || '').trim();
+  const escapedPublicUrl = safePublicUrl ? escapeHtml(safePublicUrl) : '';
+  const hasPublicUrl = Boolean(safePublicUrl);
+  const hasQrCode = Boolean(qrCodeCid);
+  const escapedQrCodeCid = hasQrCode ? escapeHtml(qrCodeCid) : '';
+
+  return `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #222;">
+      <p>Ola, <strong>${safeClientName}</strong>!</p>
+      <p>A descricao do problema da sua ordem de servico <strong>#${safeOsId}</strong> foi atualizada.</p>
+      <p><strong>Equipamento:</strong> ${safeEquipment}</p>
+      <p><strong>Status atual:</strong> ${safeStatus}</p>
+      <p><strong>Descricao atual:</strong> ${safeDescription}</p>
+      ${
+        hasPublicUrl
+          ? `
+      <p>
+        <a
+          href="${escapedPublicUrl}"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="display:inline-block;padding:10px 16px;background:#1f7a5a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;"
+        >
+          Acompanhar ordem de servico
+        </a>
+      </p>
+      <p style="font-size:12px;color:#666;word-break:break-all;">${escapedPublicUrl}</p>
+      `
+          : ''
+      }
+      ${
+        hasQrCode
+          ? `
+      <p><strong>Escaneie o QR Code para abrir a pagina publica:</strong></p>
+      <p>
+        <img
+          src="cid:${escapedQrCodeCid}"
+          alt="QR Code da pagina publica da ordem de servico"
+          width="180"
+          height="180"
+          style="display:block;border:1px solid #e1e1e1;border-radius:10px;padding:8px;background:#fff;"
+        />
+      </p>
+      `
+          : ''
+      }
+      <p>Se tiver qualquer duvida, basta responder este e-mail.</p>
+    </div>
+  `;
+}
+
 async function buildPublicStatusQrAttachment({ publicUrl, osId }) {
   const safePublicUrl = String(publicUrl || '').trim();
   if (!safePublicUrl) return null;
@@ -291,6 +394,7 @@ async function sendStatusEmailNotification({
   status,
   equipment,
   publicUrl,
+  description,
   eventType = EMAIL_EVENT_TYPES.STATUS_UPDATED
 }) {
   if (!EMAIL_ENABLED) {
@@ -335,6 +439,8 @@ async function sendStatusEmailNotification({
 
     const normalizedEventType = String(eventType || '').trim().toLowerCase();
     const isCreationEvent = normalizedEventType === EMAIL_EVENT_TYPES.OS_CREATED;
+    const isDescriptionUpdateEvent =
+      normalizedEventType === EMAIL_EVENT_TYPES.DESCRIPTION_UPDATED;
 
     if (isCreationEvent) {
       finalSubject = 'Sua ordem de servico foi aberta';
@@ -351,6 +457,26 @@ async function sendStatusEmailNotification({
         osId,
         status,
         equipment,
+        publicUrl,
+        qrCodeCid: qrCodePayload?.cid || null
+      });
+    } else if (isDescriptionUpdateEvent) {
+      finalSubject = 'Descricao do problema da OS foi atualizada';
+      finalText = buildDescriptionUpdatedEmailText({
+        clientName,
+        osId,
+        status,
+        equipment,
+        description,
+        publicUrl,
+        hasQrCode: Boolean(qrCodePayload)
+      });
+      finalHtml = buildDescriptionUpdatedEmailHtml({
+        clientName,
+        osId,
+        status,
+        equipment,
+        description,
         publicUrl,
         qrCodeCid: qrCodePayload?.cid || null
       });

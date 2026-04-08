@@ -24,5 +24,6 @@ router.use(authenticate);
 router.get('/:id', controller.getPhotosByOS);
 router.post('/upload', handleUpload, controller.uploadPhoto);
 router.post('/', controller.createPhoto);
+router.delete('/:id', controller.deletePhoto);
 
 module.exports = router;

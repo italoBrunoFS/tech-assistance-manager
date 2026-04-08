@@ -622,6 +622,11 @@ textarea:focus {
   color: var(--muted);
 }
 
+.photo-card-delete {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
 .json-preview {
   margin-top: 1rem;
   border: 1px solid #d2c6b4;

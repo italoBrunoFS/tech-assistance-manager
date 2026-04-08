@@ -31,9 +31,13 @@ export const backendApi = {
     addPart: (id, payload) => api.post(`/os/${id}/parts`, payload),
     patchStatus: (id, payload) => api.patch(`/os/${id}/status`, payload),
     patchLabor: (id, payload) => api.patch(`/os/${id}/labor`, payload),
-    getPublicStatus: (id) => api.get(`/os/${id}/status`),
-    getPublicPhotos: (id) => api.get(`/os/${id}/photos`),
-    getPublicUpdates: (id) => api.get(`/os/${id}/updates`),
+    patchDescription: (id, payload) => api.patch(`/os/${id}/description`, payload),
+    getPublicStatus: (id, accessToken) =>
+      api.get(`/os/${id}/status`, { params: { access_token: accessToken } }),
+    getPublicPhotos: (id, accessToken) =>
+      api.get(`/os/${id}/photos`, { params: { access_token: accessToken } }),
+    getPublicUpdates: (id, accessToken) =>
+      api.get(`/os/${id}/updates`, { params: { access_token: accessToken } }),
     generatePdf: (id) => api.get(`/os/${id}/pdf`, { responseType: 'blob' })
   },
   payment: {
@@ -65,7 +69,8 @@ export const backendApi = {
           'Content-Type': 'multipart/form-data'
         }
       }),
-    create: (payload) => api.post('/photo', payload)
+    create: (payload) => api.post('/photo', payload),
+    remove: (id) => api.delete(`/photo/${id}`)
   },
   notification: {
     create: (payload) => api.post('/notification', payload)

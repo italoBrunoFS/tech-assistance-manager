@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Panel, EmptyState, InlineMessage } from '../components/Ui';
 import { backendApi } from '../services/backendApi';
@@ -74,6 +73,7 @@ export function OrdersPage() {
   const [orderFilters, setOrderFilters] = useState(initialOrderFilters);
   const [statusByOrder, setStatusByOrder] = useState({});
   const [laborByOrder, setLaborByOrder] = useState({});
+  const [descriptionByOrder, setDescriptionByOrder] = useState({});
   const [qrOrderId, setQrOrderId] = useState(null);
   const [status, setStatus] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +103,12 @@ export function OrdersPage() {
         return accumulator;
       }, {})
     );
+    setDescriptionByOrder(
+      ordersList.reduce((accumulator, order) => {
+        accumulator[order.id_os] = String(order.descricao_problema || '');
+        return accumulator;
+      }, {})
+    );
   }
 
   function buildOrderSearchParams() {
@@ -123,7 +129,6 @@ export function OrdersPage() {
 
   async function loadData() {
     setIsLoading(true);
-    setStatus({ type: '', text: '' });
 
     try {
       const [ordersResponse, employeesResponse, equipmentResponse] = await Promise.all([
@@ -222,6 +227,7 @@ export function OrdersPage() {
     const currentCanonicalStatus = toCanonicalStatus(currentOrder?.status_os) || currentOrder?.status_os;
     const rawLaborValue = laborByOrder[orderId];
     const hasLaborValue = String(rawLaborValue ?? '').trim() !== '';
+    const nextDescription = String(descriptionByOrder[orderId] ?? '').trim();
 
     if (!canonicalStatus) {
       setStatus({
@@ -240,9 +246,13 @@ export function OrdersPage() {
     }
 
     const statusChanged = canonicalStatus !== currentCanonicalStatus;
+    const currentDescription = String(currentOrder.descricao_problema || '').trim();
+    const descriptionChanged = nextDescription !== currentDescription;
     let laborUpdated = false;
+    let descriptionUpdated = false;
     let updatedTotal = currentOrder.valor_total;
     let notificationStatus = null;
+    let descriptionEmailStatus = null;
 
     try {
       if (hasLaborValue) {
@@ -273,6 +283,22 @@ export function OrdersPage() {
         }
       }
 
+      if (descriptionChanged) {
+        if (!nextDescription) {
+          setStatus({
+            type: 'error',
+            text: `Informe uma descricao valida para atualizar a OS #${orderId}.`
+          });
+          return;
+        }
+
+        const descriptionResponse = await backendApi.os.patchDescription(orderId, {
+          descricao_problema: nextDescription
+        });
+        descriptionUpdated = true;
+        descriptionEmailStatus = descriptionResponse.data?.email_notification?.status || 'sem retorno';
+      }
+
       if (statusChanged) {
         const response = await backendApi.os.patchStatus(orderId, {
           status_os: canonicalStatus
@@ -280,7 +306,7 @@ export function OrdersPage() {
         notificationStatus = response.data?.notification?.status || 'sem retorno';
       }
 
-      if (!laborUpdated && !statusChanged) {
+      if (!laborUpdated && !statusChanged && !descriptionUpdated) {
         setStatus({
           type: 'info',
           text: `Nenhuma alteracao detectada para a OS #${orderId}.`
@@ -299,6 +325,10 @@ export function OrdersPage() {
 
       if (statusChanged) {
         successMessage += ` Status atualizado. Notificacao: ${notificationStatus}.`;
+      }
+
+      if (descriptionUpdated) {
+        successMessage += ` Descricao atualizada. E-mail: ${descriptionEmailStatus}.`;
       }
 
       setStatus({
@@ -324,6 +354,13 @@ export function OrdersPage() {
   }
 
   function buildPublicLink(orderId) {
+    const order = orders.find((item) => Number(item.id_os) === Number(orderId));
+    const explicitLink = String(order?.public_status_url || '').trim();
+
+    if (explicitLink) {
+      return explicitLink;
+    }
+
     return `${window.location.origin}/public/os/${orderId}`;
   }
 
@@ -340,6 +377,8 @@ export function OrdersPage() {
 
   return (
     <div className="page-stack">
+      <InlineMessage type={status.type}>{status.text}</InlineMessage>
+
       <Panel title="Nova ordem de serviço">
         <form className="form-grid" onSubmit={handleCreate}>
           <label className="field-full">
@@ -442,8 +481,6 @@ export function OrdersPage() {
       </Panel>
 
       <Panel title="Ordens cadastradas">
-        <InlineMessage type={status.type}>{status.text}</InlineMessage>
-
         <div className="form-grid">
           <label>
             ID da OS
@@ -584,6 +621,7 @@ export function OrdersPage() {
                   <th>Status</th>
                   <th>Abertura</th>
                   <th>Equip.</th>
+                  <th>Problema</th>
                   <th>Func.</th>
                   <th>Mao de obra</th>
                   <th>Total</th>
@@ -623,6 +661,19 @@ export function OrdersPage() {
                       </td>
                     <td>{formatDate(order.data_abertura)}</td>
                     <td>{order.id_equipamento}</td>
+                    <td>
+                      <textarea
+                        rows={2}
+                        value={descriptionByOrder[order.id_os] ?? ''}
+                        disabled={isLockedOrder}
+                        onChange={(event) =>
+                          setDescriptionByOrder((current) => ({
+                            ...current,
+                            [order.id_os]: event.target.value
+                          }))
+                        }
+                      />
+                    </td>
                     <td>{order.id_funcionario ?? '-'}</td>
                     <td>
                       <input
@@ -680,9 +731,14 @@ export function OrdersPage() {
                         >
                           Gerar QR
                         </button>
-                        <Link to={`/public/os/${order.id_os}`} className="button button-ghost">
+                        <a
+                          href={buildPublicLink(order.id_os)}
+                          className="button button-ghost"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           Público
-                        </Link>
+                        </a>
                       </div>
                     </td>
                     </tr>

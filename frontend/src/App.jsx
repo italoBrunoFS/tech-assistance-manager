@@ -20,7 +20,6 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<AuthPage />} />
-      <Route path="/public/os" element={<PublicStatusPage />} />
       <Route path="/public/os/:id" element={<PublicStatusPage />} />
 
       <Route element={<ProtectedRoute />}>

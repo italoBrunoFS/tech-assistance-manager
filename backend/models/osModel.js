@@ -118,6 +118,20 @@ async function patchLaborValue(id, valorMaoObra) {
   return rows[0];
 }
 
+async function patchProblemDescription(id, descricaoProblema) {
+  const { rows } = await pool.query(
+    `
+    UPDATE os
+    SET descricao_problema = $1
+    WHERE id_os = $2
+    RETURNING *
+    `,
+    [descricaoProblema, id]
+  );
+
+  return rows[0];
+}
+
 async function addPartToOS({
   id_os,
   id_peca,
@@ -251,6 +265,7 @@ module.exports = {
   createOS,
   patchStatusOs,
   patchLaborValue,
+  patchProblemDescription,
   addPartToOS,
   getStatusNotificationContext,
   getPublicOS,

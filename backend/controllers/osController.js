@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const model = require('../models/osModel');
 const notificationModel = require('../models/notificationModel');
@@ -19,11 +20,78 @@ const LEGACY_STATUS_ALIASES = new Map([
 const DEFAULT_PUBLIC_OS_PAGE_BASE_URL = 'http://localhost:5173';
 const STATUS_AUDIT_CHANNEL = 'AUDITORIA_STATUS';
 const STATUS_AUDIT_PREFIX = 'STATUS|';
+const DESCRIPTION_AUDIT_CHANNEL = 'AUDITORIA_OS';
+const DESCRIPTION_AUDIT_PREFIX = 'DESCRICAO|';
+
+function getPublicAccessSecret() {
+  return String(
+    process.env.PUBLIC_OS_ACCESS_SECRET ||
+      process.env.AUTH_TOKEN_SECRET ||
+      'public-os-dev-secret'
+  );
+}
+
+function toBase64Url(value) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function buildPublicAccessToken(idOs) {
+  const content = `os:${idOs}`;
+  const signature = crypto
+    .createHmac('sha256', getPublicAccessSecret())
+    .update(content)
+    .digest();
+
+  return toBase64Url(signature);
+}
+
+function isValidPublicAccessToken(idOs, providedToken) {
+  const received = String(providedToken || '').trim();
+  if (!received) {
+    return false;
+  }
+
+  const expected = buildPublicAccessToken(idOs);
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(received);
+
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+}
+
+function requirePublicAccessToken(req, res, idOs) {
+  const providedToken = req.query?.access_token;
+
+  if (!isValidPublicAccessToken(idOs, providedToken)) {
+    res.status(403).json({ message: 'Acesso publico invalido para esta OS' });
+    return false;
+  }
+
+  return true;
+}
+
+function attachPublicStatusUrl(req, order) {
+  if (!order || !order.id_os) {
+    return order;
+  }
+
+  return {
+    ...order,
+    public_status_url: buildPublicStatusPageUrl(req, order.id_os)
+  };
+}
 
 const getAllOS = async (req, res) => {
   try {
     const orders = await model.getAllOS();
-    res.status(200).json(orders);
+    res.status(200).json(orders.map((order) => attachPublicStatusUrl(req, order)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -80,7 +148,7 @@ const getOSByFilters = async (req, res) => {
       cliente_nome: String(req.query?.cliente_nome || '').trim() || null
     });
 
-    return res.status(200).json(orders);
+    return res.status(200).json(orders.map((order) => attachPublicStatusUrl(req, order)));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -94,7 +162,7 @@ const getOSById = async (req, res) => {
       return res.status(404).json({ message: 'OS não encontrada' });
     }
 
-    res.status(200).json(order);
+    res.status(200).json(attachPublicStatusUrl(req, order));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -167,12 +235,13 @@ async function registerNotificationLog({
   idOs,
   statusOs,
   sent,
-  channel
+  channel,
+  tipo
 }) {
   try {
     await notificationModel.createNotification({
       id_os: idOs,
-      tipo: `Mudança de status para ${statusOs}`,
+      tipo: tipo || `Mudança de status para ${statusOs}`,
       data_envio: new Date(),
       status_envio: sent ? 'Enviado' : 'Falha',
       canal: channel
@@ -233,6 +302,39 @@ function parseStatusAuditType(tipo) {
   };
 }
 
+function buildDescriptionAuditType({
+  actorId,
+  origin
+}) {
+  const actor = actorId ? String(actorId) : 'NULL';
+  const source = origin ? encodeAuditValue(origin) : 'manual';
+
+  return `${DESCRIPTION_AUDIT_PREFIX}${actor}|${source}`;
+}
+
+function parseDescriptionAuditType(tipo) {
+  const rawType = String(tipo || '');
+
+  if (!rawType.startsWith(DESCRIPTION_AUDIT_PREFIX)) {
+    return null;
+  }
+
+  const payload = rawType.slice(DESCRIPTION_AUDIT_PREFIX.length).split('|');
+
+  if (payload.length < 2) {
+    return null;
+  }
+
+  const [actorIdRaw, originRaw] = payload;
+  const parsedActorId = decodeAuditValue(actorIdRaw);
+  const actorId = parsedActorId ? Number(parsedActorId) : null;
+
+  return {
+    id_funcionario: Number.isInteger(actorId) && actorId > 0 ? actorId : null,
+    origem: decodeAuditValue(originRaw) || 'manual'
+  };
+}
+
 function mapStatusHistoryRows(notificationRows) {
   return notificationRows
     .filter((row) => row.canal === STATUS_AUDIT_CHANNEL)
@@ -248,6 +350,32 @@ function mapStatusHistoryRows(notificationRows) {
         id_os: row.id_os,
         status_anterior: parsed.status_anterior,
         status_novo: parsed.status_novo,
+        id_funcionario: parsed.id_funcionario,
+        origem: parsed.origem,
+        data_alteracao: row.data_envio
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      const leftDate = new Date(left.data_alteracao || 0).getTime();
+      const rightDate = new Date(right.data_alteracao || 0).getTime();
+      return rightDate - leftDate;
+    });
+}
+
+function mapDescriptionHistoryRows(notificationRows) {
+  return notificationRows
+    .filter((row) => row.canal === DESCRIPTION_AUDIT_CHANNEL)
+    .map((row) => {
+      const parsed = parseDescriptionAuditType(row.tipo);
+
+      if (!parsed) {
+        return null;
+      }
+
+      return {
+        id_historico: row.id_notificacao,
+        id_os: row.id_os,
         id_funcionario: parsed.id_funcionario,
         origem: parsed.origem,
         data_alteracao: row.data_envio
@@ -280,6 +408,39 @@ function buildStatusUpdatePreview(historyRows) {
       id_funcionario: entry.id_funcionario,
       origem: entry.origem
     };
+  });
+}
+
+function buildDescriptionUpdatePreview(historyRows) {
+  return historyRows.map((entry) => ({
+    id_notificacao: entry.id_historico,
+    id_os: entry.id_os,
+    tipo_evento: 'Descricao',
+    tipo: 'Descricao do problema atualizada',
+    data_envio: entry.data_alteracao,
+    status_envio: 'Registrado',
+    canal: 'Historico de OS',
+    id_funcionario: entry.id_funcionario,
+    origem: entry.origem
+  }));
+}
+
+function buildPublicUpdatePreview({
+  statusHistoryRows,
+  descriptionHistoryRows
+}) {
+  return [
+    ...buildStatusUpdatePreview(statusHistoryRows),
+    ...buildDescriptionUpdatePreview(descriptionHistoryRows)
+  ].sort((left, right) => {
+    const leftDate = new Date(left.data_envio || 0).getTime();
+    const rightDate = new Date(right.data_envio || 0).getTime();
+
+    if (rightDate !== leftDate) {
+      return rightDate - leftDate;
+    }
+
+    return Number(right.id_notificacao || 0) - Number(left.id_notificacao || 0);
   });
 }
 
@@ -370,6 +531,30 @@ async function registerStatusHistoryLog({
   }
 }
 
+async function registerDescriptionHistoryLog({
+  idOs,
+  actorId,
+  origin
+}) {
+  try {
+    await notificationModel.createNotification({
+      id_os: idOs,
+      tipo: buildDescriptionAuditType({
+        actorId,
+        origin
+      }),
+      data_envio: new Date(),
+      status_envio: 'Registrado',
+      canal: DESCRIPTION_AUDIT_CHANNEL
+    });
+  } catch (historyLogError) {
+    console.error(
+      'Falha ao registrar historico de descricao no banco:',
+      historyLogError.message
+    );
+  }
+}
+
 function normalizeStatusValue(value) {
   return String(value || '')
     .trim()
@@ -407,12 +592,13 @@ function buildPublicStatusPageUrl(req, idOs) {
   const originHeaderUrl = normalizeBaseUrl(req.get('origin'));
   const fallbackBaseUrl = normalizeBaseUrl(DEFAULT_PUBLIC_OS_PAGE_BASE_URL);
   const baseUrl = configuredBaseUrl || originHeaderUrl || fallbackBaseUrl;
+  const accessToken = buildPublicAccessToken(idOs);
 
   if (baseUrl.toLowerCase().endsWith('/public/os')) {
-    return `${baseUrl}/${idOs}`;
+    return `${baseUrl}/${idOs}?access_token=${encodeURIComponent(accessToken)}`;
   }
 
-  return `${baseUrl}/public/os/${idOs}`;
+  return `${baseUrl}/public/os/${idOs}?access_token=${encodeURIComponent(accessToken)}`;
 }
 
 const patchStatusOs = async (req, res) => {
@@ -559,6 +745,92 @@ const patchLaborValue = async (req, res) => {
   }
 };
 
+const patchProblemDescription = async (req, res) => {
+  try {
+    const idOs = Number(req.params.id);
+    const nextDescription = String(req.body?.descricao_problema || '').trim();
+
+    if (!Number.isInteger(idOs) || idOs <= 0) {
+      return res.status(400).json({ message: 'ID da OS invalido' });
+    }
+
+    if (!nextDescription) {
+      return res.status(400).json({ message: 'descricao_problema e obrigatoria' });
+    }
+
+    const currentRow = await model.getOSById(idOs);
+
+    if (!currentRow) {
+      return res.status(404).json({ message: 'OS nao encontrada' });
+    }
+
+    const currentStatus = resolveCanonicalStatus(currentRow.status_os);
+    if (currentStatus === 'Concluido') {
+      return res.status(409).json({
+        message: 'OS concluida nao pode ser alterada'
+      });
+    }
+
+    const currentDescription = String(currentRow.descricao_problema || '').trim();
+    if (currentDescription === nextDescription) {
+      return res.status(409).json({
+        message: 'descricao_problema ja esta definida com esse valor'
+      });
+    }
+
+    const patchedRow = await model.patchProblemDescription(idOs, nextDescription);
+
+    if (!patchedRow) {
+      return res.status(404).json({ message: 'OS nao encontrada' });
+    }
+
+    await registerDescriptionHistoryLog({
+      idOs,
+      actorId: req.auth?.sub || null,
+      origin: 'manual'
+    });
+
+    const context = await model.getStatusNotificationContext(idOs);
+    const equipmentName = context
+      ? `${context.tipo} ${context.marca} ${context.modelo}`.trim()
+      : null;
+    const publicStatusUrl = buildPublicStatusPageUrl(req, idOs);
+
+    const emailResult = await sendStatusEmailNotification({
+      email: context?.email,
+      clientName: context?.nome_cliente,
+      osId: idOs,
+      status: patchedRow.status_os,
+      equipment: equipmentName,
+      publicUrl: publicStatusUrl,
+      eventType: 'description_updated',
+      description: patchedRow.descricao_problema
+    });
+
+    await registerNotificationLog({
+      idOs,
+      statusOs: patchedRow.status_os,
+      sent: emailResult.sent,
+      channel: 'Email',
+      tipo: 'Atualizacao de descricao do problema'
+    });
+
+    return res.status(200).json({
+      message: 'Descricao do problema atualizada com sucesso',
+      data: patchedRow,
+      public_status_url: publicStatusUrl,
+      email_notification: {
+        channel: 'Email',
+        sent: emailResult.sent,
+        status: emailResult.status,
+        public_url: publicStatusUrl
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 const addPartToOS = async (req, res) => {
   try {
     const idOs = Number(req.params.id);
@@ -615,7 +887,17 @@ const addPartToOS = async (req, res) => {
 
 const getPublicOS = async (req, res) => {
   try {
-    const os = await model.getPublicOS(req.params.id);
+    const idOs = Number(req.params.id);
+
+    if (!Number.isInteger(idOs) || idOs <= 0) {
+      return res.status(400).json({ message: 'ID da OS invalido' });
+    }
+
+    if (!requirePublicAccessToken(req, res, idOs)) {
+      return;
+    }
+
+    const os = await model.getPublicOS(idOs);
 
     if (!os) {
       return res.status(404).json({ message: 'OS não encontrada' });
@@ -633,6 +915,10 @@ const getPublicOSPhotos = async (req, res) => {
 
     if (!Number.isInteger(idOs) || idOs <= 0) {
       return res.status(400).json({ message: 'ID da OS inválido' });
+    }
+
+    if (!requirePublicAccessToken(req, res, idOs)) {
+      return;
     }
 
     const os = await model.getPublicOS(idOs);
@@ -656,14 +942,14 @@ async function fetchStatusHistoryForOS(idOs) {
   const os = await model.getOSById(idOs);
 
   if (!os) {
-    return { os: null, history: [] };
+    return { os: null, history: [], notificationRows: [] };
   }
 
   const notificationRows = await notificationModel.getNotificationsByOS(idOs);
   const mappedHistory = mapStatusHistoryRows(notificationRows);
   const history = ensureInitialHistoryEntry(mappedHistory, os);
 
-  return { os, history };
+  return { os, history, notificationRows };
 }
 
 const getStatusHistoryByOS = async (req, res) => {
@@ -697,15 +983,24 @@ const getPublicOSUpdates = async (req, res) => {
       return res.status(400).json({ message: 'ID da OS inválido' });
     }
 
-    const { os, history } = await fetchStatusHistoryForOS(idOs);
+    if (!requirePublicAccessToken(req, res, idOs)) {
+      return;
+    }
+
+    const { os, history, notificationRows } = await fetchStatusHistoryForOS(idOs);
 
     if (!os) {
       return res.status(404).json({ message: 'OS não encontrada' });
     }
 
+    const descriptionHistory = mapDescriptionHistoryRows(notificationRows || []);
+
     return res.status(200).json({
       id_os: idOs,
-      updates: buildStatusUpdatePreview(history)
+      updates: buildPublicUpdatePreview({
+        statusHistoryRows: history,
+        descriptionHistoryRows: descriptionHistory
+      })
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -876,6 +1171,7 @@ module.exports = {
   createOS,
   patchStatusOs,
   patchLaborValue,
+  patchProblemDescription,
   addPartToOS,
   getPublicOS,
   getPublicOSPhotos,

@@ -18,5 +18,6 @@ router.post('/', controller.createOS);
 router.post('/:id/parts', controller.addPartToOS);
 router.patch('/:id/status', controller.patchStatusOs);
 router.patch('/:id/labor', controller.patchLaborValue);
+router.patch('/:id/description', controller.patchProblemDescription);
 
 module.exports = router;

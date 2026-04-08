@@ -18,6 +18,7 @@ export function PhotosPage() {
   const [manualForm, setManualForm] = useState(initialManualForm);
   const [status, setStatus] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
 
   async function loadOrders() {
     setIsLoading(true);
@@ -93,6 +94,26 @@ export function PhotosPage() {
       }
     } catch (error) {
       setStatus({ type: 'error', text: extractApiError(error) });
+    }
+  }
+
+  async function handleDeletePhoto(photoId) {
+    const confirmed = window.confirm('Deseja remover esta foto da OS?');
+    if (!confirmed) {
+      return;
+    }
+
+    setStatus({ type: '', text: '' });
+    setDeletingPhotoId(photoId);
+
+    try {
+      await backendApi.photo.remove(photoId);
+      setStatus({ type: 'success', text: `Foto #${photoId} removida com sucesso.` });
+      await loadPhotosByOrder(selectedOrderId);
+    } catch (error) {
+      setStatus({ type: 'error', text: extractApiError(error) });
+    } finally {
+      setDeletingPhotoId(null);
     }
   }
 
@@ -212,6 +233,14 @@ export function PhotosPage() {
                 <figcaption>
                   <span>Foto #{photo.id_foto}</span>
                   <small>{formatDateTime(photo.data_upload)}</small>
+                  <button
+                    type="button"
+                    className="button button-danger photo-card-delete"
+                    onClick={() => handleDeletePhoto(photo.id_foto)}
+                    disabled={deletingPhotoId === photo.id_foto}
+                  >
+                    {deletingPhotoId === photo.id_foto ? 'Removendo...' : 'Remover foto'}
+                  </button>
                 </figcaption>
               </figure>
             ))}
