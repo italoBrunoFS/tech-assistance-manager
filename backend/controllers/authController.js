@@ -68,7 +68,7 @@ async function bootstrapAdmin(req, res) {
       nome: req.body?.nome,
       email: req.body?.email,
       senha: req.body?.password,
-      nivel_acesso: 'admin',
+      nivel_acesso: 3,
       id_cargo: req.body?.id_cargo || null
     });
 

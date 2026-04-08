@@ -3,26 +3,28 @@ import { Panel, EmptyState, InlineMessage } from '../components/Ui';
 import { backendApi } from '../services/backendApi';
 import { extractApiError } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import {
+  formatAccessLevel,
+  hasAdminAccess,
+  hasManagerAccess,
+  toAccessLevel
+} from '../lib/accessLevel';
 
 const initialForm = {
   nome_cargo: '',
-  nivel_acesso: 'tecnico'
+  nivel_acesso: 1
 };
-
-const managerRoles = new Set(['admin', 'gerente']);
-const accessLevels = ['admin', 'gerente', 'tecnico'];
 
 function buildAccessDrafts(employees = []) {
   return employees.reduce((acc, employee) => {
-    acc[employee.id_funcionario] = String(employee.nivel_acesso || 'tecnico').toLowerCase();
+    acc[employee.id_funcionario] = toAccessLevel(employee.nivel_acesso) ?? 1;
     return acc;
   }, {});
 }
 
 function formatAccessLevelLabel(level) {
-  const normalizedLevel = String(level || '').trim().toLowerCase();
-  if (normalizedLevel === 'tecnico') return 'técnico';
-  return normalizedLevel || '-';
+  const normalizedLevel = formatAccessLevel(level);
+  return normalizedLevel;
 }
 
 export function CargosPage() {
@@ -35,13 +37,26 @@ export function CargosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingEmployeeId, setSavingEmployeeId] = useState(null);
 
+  const sortedCargosByLevel = useMemo(() => {
+    return [...cargos].sort((a, b) => {
+      const levelA = toAccessLevel(a.nivel_acesso) ?? 1;
+      const levelB = toAccessLevel(b.nivel_acesso) ?? 1;
+
+      if (levelA !== levelB) {
+        return levelA - levelB;
+      }
+
+      return String(a.nome_cargo || '').localeCompare(String(b.nome_cargo || ''), 'pt-BR');
+    });
+  }, [cargos]);
+
   const canCreateCargo = useMemo(
-    () => managerRoles.has(String(user?.nivel_acesso || '').toLowerCase()),
+    () => hasManagerAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
 
   const canManageAccessLevel = useMemo(
-    () => String(user?.nivel_acesso || '').toLowerCase() === 'admin',
+    () => hasAdminAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
 
@@ -97,8 +112,8 @@ export function CargosPage() {
       return;
     }
 
-    const nextAccessLevel = accessDrafts[employee.id_funcionario] || employee.nivel_acesso;
-    const currentAccessLevel = String(employee.nivel_acesso || '').toLowerCase();
+    const nextAccessLevel = toAccessLevel(accessDrafts[employee.id_funcionario]) ?? 1;
+    const currentAccessLevel = toAccessLevel(employee.nivel_acesso) ?? 1;
 
     if (nextAccessLevel === currentAccessLevel) {
       setStatus({ type: 'info', text: 'Nenhuma alteracao de nivel para salvar.' });
@@ -145,17 +160,17 @@ export function CargosPage() {
 
           <label>
             Nível de acesso
-            <select
-              value={form.nivel_acesso}
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={toAccessLevel(form.nivel_acesso) ?? 1}
               onChange={(event) =>
-                setForm((value) => ({ ...value, nivel_acesso: event.target.value }))
+                setForm((value) => ({ ...value, nivel_acesso: Number(event.target.value || 1) }))
               }
               disabled={!canCreateCargo}
-            >
-              <option value="admin">admin</option>
-              <option value="gerente">gerente</option>
-              <option value="tecnico">técnico</option>
-            </select>
+              required
+            />
           </label>
 
           <div className="form-actions">
@@ -186,7 +201,7 @@ export function CargosPage() {
                 </tr>
               </thead>
               <tbody>
-                {cargos.map((cargo) => (
+                {sortedCargosByLevel.map((cargo) => (
                   <tr key={cargo.id_cargo}>
                     <td>{cargo.id_cargo}</td>
                     <td>{cargo.nome_cargo}</td>
@@ -232,8 +247,8 @@ export function CargosPage() {
                 {employees.map((employee) => {
                   const employeeId = employee.id_funcionario;
                   const isOwnUser = Number(employeeId) === Number(user?.id_funcionario);
-                  const currentLevel = String(employee.nivel_acesso || '').toLowerCase();
-                  const selectedLevel = accessDrafts[employeeId] || currentLevel;
+                  const currentLevel = toAccessLevel(employee.nivel_acesso) ?? 1;
+                  const selectedLevel = toAccessLevel(accessDrafts[employeeId]) ?? currentLevel;
                   const hasChanges = selectedLevel !== currentLevel;
                   const isSaving = savingEmployeeId === employeeId;
                   const disableActions = !canManageAccessLevel || isOwnUser || isSaving;
@@ -245,22 +260,19 @@ export function CargosPage() {
                       <td>{employee.email}</td>
                       <td>{formatAccessLevelLabel(currentLevel)}</td>
                       <td>
-                        <select
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
                           value={selectedLevel}
                           disabled={!canManageAccessLevel || isOwnUser || isSaving}
                           onChange={(event) =>
                             setAccessDrafts((value) => ({
                               ...value,
-                              [employeeId]: event.target.value
+                              [employeeId]: Number(event.target.value || 1)
                             }))
                           }
-                        >
-                          {accessLevels.map((accessLevel) => (
-                            <option key={accessLevel} value={accessLevel}>
-                              {formatAccessLevelLabel(accessLevel)}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </td>
                       <td>
                         <button

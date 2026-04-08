@@ -15,6 +15,54 @@ const initialForm = {
   complemento: ''
 };
 
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function formatCpf(value) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatPhone(value) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+
+  const areaCode = digits.slice(0, 2);
+  const rest = digits.slice(2);
+
+  if (rest.length <= 4) return `(${areaCode}) ${rest}`;
+
+  if (rest.length <= 8) {
+    return `(${areaCode}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  }
+
+  return `(${areaCode}) ${rest.slice(0, 5)}-${rest.slice(5, 9)}`;
+}
+
+function formatCep(value) {
+  const digits = onlyDigits(value).slice(0, 8);
+
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function normalizeClientPayload(form) {
+  return {
+    ...form,
+    cpf: formatCpf(form.cpf),
+    telefone: formatPhone(form.telefone),
+    cep: formatCep(form.cep)
+  };
+}
+
 export function ClientsPage() {
   const [clients, setClients] = useState([]);
   const [form, setForm] = useState(initialForm);
@@ -61,13 +109,14 @@ export function ClientsPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setStatus({ type: '', text: '' });
+    const payload = normalizeClientPayload(form);
 
     try {
       if (editingId) {
-        await backendApi.clients.update(editingId, form);
+        await backendApi.clients.update(editingId, payload);
         setStatus({ type: 'success', text: 'Cliente atualizado com sucesso.' });
       } else {
-        await backendApi.clients.create(form);
+        await backendApi.clients.create(payload);
         setStatus({ type: 'success', text: 'Cliente criado com sucesso.' });
       }
 
@@ -111,14 +160,18 @@ export function ClientsPage() {
   }
 
   async function handleSearchByPhone() {
-    if (!queryPhone.trim()) {
+    const formattedPhone = formatPhone(queryPhone);
+
+    if (!formattedPhone) {
       await loadClients();
       return;
     }
 
     try {
-      const response = await backendApi.clients.searchByPhone(queryPhone.trim());
-      setClients(response.data ? [response.data] : []);
+      const response = await backendApi.clients.searchByPhone(formattedPhone);
+      setClients(
+        Array.isArray(response.data) ? response.data : response.data ? [response.data] : []
+      );
       setStatus({ type: 'success', text: 'Busca por telefone concluída.' });
     } catch (error) {
       setStatus({ type: 'error', text: extractApiError(error) });
@@ -172,7 +225,12 @@ export function ClientsPage() {
             <input
               type="text"
               value={form.cpf}
-              onChange={(event) => setForm((value) => ({ ...value, cpf: event.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, cpf: formatCpf(event.target.value) }))
+              }
+              inputMode="numeric"
+              maxLength={14}
+              placeholder="193.574.826-41"
               required
             />
           </label>
@@ -183,8 +241,11 @@ export function ClientsPage() {
               type="text"
               value={form.telefone}
               onChange={(event) =>
-                setForm((value) => ({ ...value, telefone: event.target.value }))
+                setForm((value) => ({ ...value, telefone: formatPhone(event.target.value) }))
               }
+              inputMode="numeric"
+              maxLength={15}
+              placeholder="(11) 98765-2143"
               required
             />
           </label>
@@ -234,7 +295,12 @@ export function ClientsPage() {
             <input
               type="text"
               value={form.cep}
-              onChange={(event) => setForm((value) => ({ ...value, cep: event.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, cep: formatCep(event.target.value) }))
+              }
+              inputMode="numeric"
+              maxLength={9}
+              placeholder="69005-120"
               required
             />
           </label>
@@ -291,7 +357,9 @@ export function ClientsPage() {
               <input
                 type="text"
                 value={queryPhone}
-                onChange={(event) => setQueryPhone(event.target.value)}
+                onChange={(event) => setQueryPhone(formatPhone(event.target.value))}
+                inputMode="numeric"
+                maxLength={15}
               />
             </label>
             <button
@@ -355,7 +423,7 @@ export function ClientsPage() {
                   <tr key={client.id_cliente}>
                     <td>{client.id_cliente}</td>
                     <td>{client.nome}</td>
-                    <td>{client.telefone}</td>
+                    <td>{formatPhone(client.telefone)}</td>
                     <td>{client.email}</td>
                     <td>
                       <div className="table-actions">
@@ -366,13 +434,13 @@ export function ClientsPage() {
                             setEditingId(client.id_cliente);
                             setForm({
                               nome: client.nome ?? '',
-                              cpf: client.cpf ?? '',
-                              telefone: client.telefone ?? '',
+                              cpf: formatCpf(client.cpf ?? ''),
+                              telefone: formatPhone(client.telefone ?? ''),
                               email: client.email ?? '',
                               rua: client.rua ?? '',
                               bairro: client.bairro ?? '',
                               numero: client.numero ?? '',
-                              cep: client.cep ?? '',
+                              cep: formatCep(client.cep ?? ''),
                               complemento: client.complemento ?? ''
                             });
                             scrollToFormPanel();

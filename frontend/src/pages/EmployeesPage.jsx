@@ -3,21 +3,41 @@ import { Panel, EmptyState, InlineMessage } from '../components/Ui';
 import { backendApi } from '../services/backendApi';
 import { extractApiError } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import {
+  formatAccessLevel,
+  hasAdminAccess,
+  hasManagerAccess,
+  toAccessLevel
+} from '../lib/accessLevel';
 
 const initialForm = {
   nome: '',
   email: '',
   senha: '',
-  nivel_acesso: 'tecnico',
+  nivel_acesso: 1,
   id_cargo: ''
 };
 
-const managerRoles = new Set(['admin', 'gerente']);
+function resolveAccessLevelByCargo(cargos, cargoId) {
+  const parsedCargoId = Number(cargoId);
 
-function formatAccessLevelLabel(level) {
-  const normalizedLevel = String(level || '').trim().toLowerCase();
-  if (normalizedLevel === 'tecnico') return 'técnico';
-  return normalizedLevel || '-';
+  if (!Number.isInteger(parsedCargoId) || parsedCargoId <= 0) {
+    return null;
+  }
+
+  const selectedCargo = cargos.find((cargo) => Number(cargo.id_cargo) === parsedCargoId);
+  return toAccessLevel(selectedCargo?.nivel_acesso);
+}
+
+function resolveCargoNameById(cargos, cargoId) {
+  const parsedCargoId = Number(cargoId);
+
+  if (!Number.isInteger(parsedCargoId) || parsedCargoId <= 0) {
+    return '-';
+  }
+
+  const selectedCargo = cargos.find((cargo) => Number(cargo.id_cargo) === parsedCargoId);
+  return selectedCargo?.nome_cargo || `Cargo #${parsedCargoId}`;
 }
 
 export function EmployeesPage() {
@@ -30,13 +50,26 @@ export function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const formPanelRef = useRef(null);
 
+  const sortedCargosByLevel = useMemo(() => {
+    return [...cargos].sort((a, b) => {
+      const levelA = toAccessLevel(a.nivel_acesso) ?? 1;
+      const levelB = toAccessLevel(b.nivel_acesso) ?? 1;
+
+      if (levelA !== levelB) {
+        return levelA - levelB;
+      }
+
+      return String(a.nome_cargo || '').localeCompare(String(b.nome_cargo || ''), 'pt-BR');
+    });
+  }, [cargos]);
+
   const isManager = useMemo(
-    () => managerRoles.has(String(user?.nivel_acesso || '').toLowerCase()),
+    () => hasManagerAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
 
   const isAdmin = useMemo(
-    () => String(user?.nivel_acesso || '').toLowerCase() === 'admin',
+    () => hasAdminAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
 
@@ -84,11 +117,14 @@ export function EmployeesPage() {
       email: form.email,
       id_cargo: form.id_cargo ? Number(form.id_cargo) : null
     };
+    const deducedAccessLevel = resolveAccessLevelByCargo(cargos, form.id_cargo);
 
-    if (isAdmin) {
-      payload.nivel_acesso = form.nivel_acesso;
-    } else if (!editingId) {
-      payload.nivel_acesso = 'tecnico';
+    if (deducedAccessLevel !== null) {
+      payload.nivel_acesso = deducedAccessLevel;
+    } else if (editingId) {
+      payload.nivel_acesso = toAccessLevel(form.nivel_acesso) ?? 1;
+    } else {
+      payload.nivel_acesso = 1;
     }
 
     if (form.senha) {
@@ -185,30 +221,34 @@ export function EmployeesPage() {
 
           <label>
             Nível de acesso
-            <select
-              value={form.nivel_acesso}
-              onChange={(event) =>
-                setForm((value) => ({ ...value, nivel_acesso: event.target.value }))
-              }
-              disabled={!isAdmin}
-            >
-              <option value="admin">admin</option>
-              <option value="gerente">gerente</option>
-              <option value="tecnico">técnico</option>
-            </select>
+            <input
+              type="number"
+              value={toAccessLevel(form.nivel_acesso) ?? 1}
+              disabled
+              readOnly
+            />
           </label>
 
           <label>
             Cargo
             <select
               value={form.id_cargo}
-              onChange={(event) => setForm((value) => ({ ...value, id_cargo: event.target.value }))}
+              onChange={(event) => {
+                const selectedCargoId = event.target.value;
+                const deducedAccessLevel = resolveAccessLevelByCargo(cargos, selectedCargoId);
+
+                setForm((value) => ({
+                  ...value,
+                  id_cargo: selectedCargoId,
+                  nivel_acesso: deducedAccessLevel ?? 1
+                }));
+              }}
               disabled={!isManager}
             >
               <option value="">Sem cargo</option>
-              {cargos.map((cargo) => (
+              {sortedCargosByLevel.map((cargo) => (
                 <option key={cargo.id_cargo} value={cargo.id_cargo}>
-                  #{cargo.id_cargo} - {cargo.nome_cargo}
+                  {cargo.nome_cargo} (nivel {formatAccessLevel(cargo.nivel_acesso)})
                 </option>
               ))}
             </select>
@@ -254,8 +294,8 @@ export function EmployeesPage() {
                     <td>{employee.id_funcionario}</td>
                     <td>{employee.nome}</td>
                     <td>{employee.email}</td>
-                    <td>{formatAccessLevelLabel(employee.nivel_acesso)}</td>
-                    <td>{employee.id_cargo || '-'}</td>
+                    <td>{formatAccessLevel(employee.nivel_acesso)}</td>
+                    <td>{resolveCargoNameById(cargos, employee.id_cargo)}</td>
                     <td>
                       <div className="table-actions">
                         <button
@@ -268,7 +308,7 @@ export function EmployeesPage() {
                               nome: employee.nome,
                               email: employee.email,
                               senha: '',
-                              nivel_acesso: employee.nivel_acesso,
+                              nivel_acesso: toAccessLevel(employee.nivel_acesso) ?? 1,
                               id_cargo: employee.id_cargo ? String(employee.id_cargo) : ''
                             });
                             scrollToFormPanel();

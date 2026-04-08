@@ -34,7 +34,6 @@ export function EquipmentsPage() {
 
   async function loadData() {
     setIsLoading(true);
-    setStatus({ type: '', text: '' });
 
     try {
       const [equipmentResponse, clientsResponse] = await Promise.all([

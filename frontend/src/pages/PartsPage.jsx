@@ -25,11 +25,15 @@ export function PartsPage() {
   const [status, setStatus] = useState({ type: '', text: '' });
   const [isLoading, setIsLoading] = useState(true);
   const formPanelRef = useRef(null);
+  const sortedParts = useMemo(
+    () => [...parts].sort((left, right) => Number(left.id_peca) - Number(right.id_peca)),
+    [parts]
+  );
   const sortedOrders = useMemo(
     () => [...orders].sort((left, right) => Number(right.id_os) - Number(left.id_os)),
     [orders]
   );
-  const canAttachPart = parts.length > 0 && sortedOrders.length > 0;
+  const canAttachPart = sortedParts.length > 0 && sortedOrders.length > 0;
 
   async function loadData() {
     setIsLoading(true);
@@ -207,7 +211,7 @@ export function PartsPage() {
               required
             >
               <option value="">Selecione</option>
-              {parts.map((part) => (
+              {sortedParts.map((part) => (
                 <option key={`part-${part.id_peca}`} value={part.id_peca}>
                   #{part.id_peca} - {part.nome_peca}
                 </option>
@@ -316,11 +320,11 @@ export function PartsPage() {
 
         {isLoading ? <p>Carregando peças...</p> : null}
 
-        {!isLoading && parts.length === 0 ? (
+        {!isLoading && sortedParts.length === 0 ? (
           <EmptyState>Nenhuma peça cadastrada.</EmptyState>
         ) : null}
 
-        {!isLoading && parts.length > 0 ? (
+        {!isLoading && sortedParts.length > 0 ? (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -333,7 +337,7 @@ export function PartsPage() {
                 </tr>
               </thead>
               <tbody>
-                {parts.map((part) => (
+                {sortedParts.map((part) => (
                   <tr key={part.id_peca}>
                     <td>{part.id_peca}</td>
                     <td>{part.nome_peca}</td>

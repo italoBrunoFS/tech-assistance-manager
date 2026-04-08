@@ -8,7 +8,7 @@ async function getAllCargos() {
 
 async function createCargo({ nome_cargo, nivel_acesso }) {
   if (!isValidAccessLevel(nivel_acesso)) {
-    throw new Error('nivel_acesso invalido. Use 1, 2 ou 3');
+    throw new Error('nivel_acesso invalido. Use um numero inteiro maior ou igual a 1');
   }
 
   const accessLevelCode = toAccessLevelCode(nivel_acesso);

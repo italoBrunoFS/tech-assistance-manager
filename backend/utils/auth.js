@@ -9,12 +9,6 @@ const ACCESS_LEVEL_CODE_BY_ROLE = {
   admin: 3
 };
 
-const ACCESS_LEVEL_ROLE_BY_CODE = {
-  1: 'tecnico',
-  2: 'gerente',
-  3: 'admin'
-};
-
 function toBase64Url(input) {
   return Buffer.from(input)
     .toString('base64')
@@ -48,7 +42,7 @@ function toAccessLevelCode(level) {
   }
 
   if (typeof level === 'number' && Number.isInteger(level)) {
-    return ACCESS_LEVEL_ROLE_BY_CODE[level] ? level : null;
+    return level >= 1 ? level : null;
   }
 
   const normalized = String(level).trim().toLowerCase();
@@ -59,19 +53,18 @@ function toAccessLevelCode(level) {
 
   if (/^\d+$/.test(normalized)) {
     const code = Number(normalized);
-    return ACCESS_LEVEL_ROLE_BY_CODE[code] ? code : null;
+    return code >= 1 ? code : null;
   }
 
   return null;
 }
 
 function normalizeAccessLevel(level) {
-  const accessLevelCode = toAccessLevelCode(level);
-  return accessLevelCode ? ACCESS_LEVEL_ROLE_BY_CODE[accessLevelCode] : '';
+  return toAccessLevelCode(level);
 }
 
 function isValidAccessLevel(level) {
-  return toAccessLevelCode(level) !== null;
+  return Number.isInteger(toAccessLevelCode(level));
 }
 
 async function hashPassword(password) {

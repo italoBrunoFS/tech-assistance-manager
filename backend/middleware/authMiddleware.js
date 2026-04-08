@@ -19,7 +19,13 @@ function authenticate(req, res, next) {
 }
 
 function authorizeRoles(...allowedRoles) {
-  const normalizedRoles = allowedRoles.map(normalizeAccessLevel);
+  const normalizedRoles = allowedRoles
+    .map(normalizeAccessLevel)
+    .filter((level) => Number.isInteger(level));
+
+  const minimumRequiredLevel = normalizedRoles.length > 0
+    ? Math.min(...normalizedRoles)
+    : 1;
 
   return (req, res, next) => {
     if (!req.auth) {
@@ -28,7 +34,7 @@ function authorizeRoles(...allowedRoles) {
 
     const userRole = normalizeAccessLevel(req.auth.nivel_acesso);
 
-    if (!normalizedRoles.includes(userRole)) {
+    if (!Number.isInteger(userRole) || userRole < minimumRequiredLevel) {
       return res.status(403).json({ message: 'Acesso negado para este perfil' });
     }
 

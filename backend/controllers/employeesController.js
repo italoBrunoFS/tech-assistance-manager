@@ -1,10 +1,9 @@
 const model = require('../models/employeesModel');
 const { normalizeAccessLevel } = require('../utils/auth');
 
-const allowedAccessLevels = new Set(['admin', 'gerente', 'tecnico']);
-
 function isAdminRequest(req) {
-  return normalizeAccessLevel(req.auth?.nivel_acesso) === 'admin';
+  const accessLevel = normalizeAccessLevel(req.auth?.nivel_acesso);
+  return Number.isInteger(accessLevel) && accessLevel >= 3;
 }
 
 const getAllEmployees = async (req, res) => {
@@ -34,7 +33,7 @@ const createEmployee = async (req, res) => {
     const payload = { ...req.body };
 
     if (!isAdminRequest(req)) {
-      payload.nivel_acesso = 'tecnico';
+      payload.nivel_acesso = 1;
     }
 
     const employee = await model.createEmployee(payload);
@@ -118,8 +117,8 @@ const updateEmployeeAccessLevel = async (req, res) => {
 
     const normalizedAccessLevel = normalizeAccessLevel(req.body?.nivel_acesso);
 
-    if (!allowedAccessLevels.has(normalizedAccessLevel)) {
-      return res.status(400).json({ message: 'nivel_acesso invalido. Use 1, 2, 3 ou tecnico, gerente, admin' });
+    if (!Number.isInteger(normalizedAccessLevel) || normalizedAccessLevel < 1) {
+      return res.status(400).json({ message: 'nivel_acesso invalido. Use um numero inteiro maior ou igual a 1' });
     }
 
     const updatedEmployee = await model.updateEmployeeAccessLevel(targetId, normalizedAccessLevel);

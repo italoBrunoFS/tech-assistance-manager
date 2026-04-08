@@ -26,7 +26,7 @@ function resolveAccessLevelForStorage(level, fallback = 1) {
   }
 
   if (!isValidAccessLevel(level)) {
-    throw new Error('nivel_acesso invalido. Use 1, 2 ou 3');
+    throw new Error('nivel_acesso invalido. Use um numero inteiro maior ou igual a 1');
   }
 
   return toAccessLevelCode(level);

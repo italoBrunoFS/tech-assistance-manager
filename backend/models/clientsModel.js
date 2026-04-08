@@ -154,8 +154,58 @@ async function getClientByEmail(email) {
 }
 
 async function getClientByPhone(telefone) {
-  const {rows} = await pool.query('SELECT * FROM cliente WHERE telefone = $1', [telefone]);
-  return rows[0];
+  const rawPhone = String(telefone || '').trim();
+  const phoneDigits = rawPhone.replace(/\D/g, '');
+
+  if (!rawPhone) {
+    return [];
+  }
+
+  if (phoneDigits) {
+    const { rows } = await pool.query(
+      `
+      SELECT
+        id_cliente,
+        nome,
+        cpf,
+        telefone,
+        email,
+        rua,
+        bairro,
+        numero,
+        cep,
+        complemento
+      FROM cliente
+      WHERE regexp_replace(telefone, '\\D', '', 'g') LIKE $1 || '%'
+      ORDER BY nome ASC
+      `,
+      [phoneDigits]
+    );
+
+    return rows;
+  }
+
+  const { rows } = await pool.query(
+    `
+    SELECT
+      id_cliente,
+      nome,
+      cpf,
+      telefone,
+      email,
+      rua,
+      bairro,
+      numero,
+      cep,
+      complemento
+    FROM cliente
+    WHERE telefone ILIKE $1
+    ORDER BY nome ASC
+    `,
+    [`${rawPhone}%`]
+  );
+
+  return rows;
 }
 
 async function getClientsByName(nome) {

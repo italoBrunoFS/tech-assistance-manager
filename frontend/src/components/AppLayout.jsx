@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { formatAccessLevel } from '../lib/accessLevel';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard' },
@@ -15,16 +16,6 @@ const navItems = [
   { path: '/notificacoes', label: 'Notificações' },
   { path: '/relatorios', label: 'Relatórios' }
 ];
-
-function formatAccessLevelLabel(level) {
-  const normalizedLevel = String(level || '').trim().toLowerCase();
-
-  if (!normalizedLevel || normalizedLevel === 'tecnico') return 'Técnico';
-  if (normalizedLevel === 'admin') return 'Administrador';
-  if (normalizedLevel === 'gerente') return 'Gerente';
-
-  return normalizedLevel.charAt(0).toUpperCase() + normalizedLevel.slice(1);
-}
 
 export function AppLayout() {
   const { logout, user } = useAuth();
@@ -58,7 +49,7 @@ export function AppLayout() {
 
         <div className="sidebar-footer">
           <p>{user?.nome || 'Usuário autenticado'}</p>
-          <small className="sidebar-role">Nível de acesso: {formatAccessLevelLabel(user?.nivel_acesso)}</small>
+          <small className="sidebar-role">Nível de acesso: {formatAccessLevel(user?.nivel_acesso)}</small>
           <button type="button" className="button button-ghost" onClick={logout}>
             Sair
           </button>

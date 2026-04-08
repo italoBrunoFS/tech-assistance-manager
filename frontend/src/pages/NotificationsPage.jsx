@@ -4,6 +4,7 @@ import { backendApi } from '../services/backendApi';
 import { extractApiError } from '../lib/api';
 import { toLocalDateTimeInputValue } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
+import { hasManagerAccess } from '../lib/accessLevel';
 
 const initialForm = {
   id_os: '',
@@ -13,8 +14,6 @@ const initialForm = {
   canal: 'WhatsApp'
 };
 
-const managerRoles = new Set(['admin', 'gerente']);
-
 export function NotificationsPage() {
   const { user } = useAuth();
   const [form, setForm] = useState(initialForm);
@@ -22,7 +21,7 @@ export function NotificationsPage() {
   const [status, setStatus] = useState({ type: '', text: '' });
 
   const canCreate = useMemo(
-    () => managerRoles.has(String(user?.nivel_acesso || '').toLowerCase()),
+    () => hasManagerAccess(user?.nivel_acesso),
     [user?.nivel_acesso]
   );
 

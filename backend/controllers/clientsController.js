@@ -90,11 +90,11 @@ const getClientByPhone = async (req, res) => {
       return res.status(400).json({ message: 'Telefone obrigatório' });
     }
 
-    const client = await model.getClientByPhone(telefone);
-    if (!client) {
+    const clients = await model.getClientByPhone(telefone);
+    if (!clients || clients.length === 0) {
       return res.status(404).json({ message: 'Cliente não encontrado' });
     }
-    res.status(200).json(client);
+    res.status(200).json(clients);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
